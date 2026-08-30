@@ -4,79 +4,95 @@
  *  3. When the parent element detects a click, check the mouse position. If the mouse position is outside the parent element's Rect, then determine that the pseudo-class has been clicked
  */
 class CollapseListPlugin extends BasePlugin {
-    className = "plugin-collapsed-list"
-    selector = '#write [mdtype="list"]'
-    triangleStyle = { left: -18, top: 0, height: 9, halfWidth: 7, color: this.config.TRIANGLE_COLOR || "var(--meta-content-color)" }
+  className = "plugin-collapsed-list"
+  selector = `#write [mdtype="list"]`
+  TRIANGLE_STYLE = { left: -18, top: 0, height: 9, halfWidth: 7 }
 
-    styleTemplate = () => true
+  style = () => `
+#write .ul-list, #write .ol-list { position: relative !important; }
+#write .ul-list:before, #write .ol-list:before {
+  position: absolute;
+  content: "";
+  top: ${this.TRIANGLE_STYLE.top}px;
+  left: ${this.TRIANGLE_STYLE.left}px;
+  border-left: ${this.TRIANGLE_STYLE.halfWidth}px solid transparent;
+  border-right: ${this.TRIANGLE_STYLE.halfWidth}px solid transparent;
+  border-top: ${this.TRIANGLE_STYLE.height}px solid ${this.config.TRIANGLE_COLOR || "var(--meta-content-color)"};
+  transition: transform .1s ease-in-out;
+  cursor: pointer;
+}
+#write .${this.className}:before { transform: rotate(-90deg); }
+#write .${this.className} > li:nth-child(n+2) { display: none !important; }`
 
-    process = () => {
-        this.utils.settings.autoSave(this)
-        this.recordCollapseState(false)
-        this.utils.entities.eWrite.addEventListener("click", ev => {
-            const parent = ev.target.closest(this.selector)
-            if (!parent) return
+  process = () => {
+    this.utils.settings.autoSave(this)
+    this.recordCollapseState(false)
+    this.utils.entities.eWrite.addEventListener("click", ev => {
+      const parent = ev.target.closest(this.selector)
+      if (!parent) return
 
-            const { clientX, clientY } = ev
-            const { left: PLeft, top: PTop } = parent.getBoundingClientRect()
-            const { left: TLeft, top: TTop, height: THeight, halfWidth: THalfWidth } = this.triangleStyle
+      const { clientX, clientY } = ev
+      const { left: PLeft, top: PTop } = parent.getBoundingClientRect()
+      const { left: TLeft, top: TTop, height: THeight, halfWidth: THalfWidth } = this.TRIANGLE_STYLE
 
-            const left = PLeft + TLeft
-            const top = PTop + TTop
-            const height = THeight
-            const width = 2 * THalfWidth
-            const clicked = (
-                left - width <= clientX
-                && clientX <= left + width
-                && top - height <= clientY
-                && clientY <= top + height
-            )
-            if (clicked) {
-                ev.stopPropagation()
-                ev.preventDefault()
-                this.toggleCollapse(parent)
-            }
-        })
+      const left = PLeft + TLeft
+      const top = PTop + TTop
+      const height = THeight
+      const width = 2 * THalfWidth
+      const clicked = (
+        left - width <= clientX
+        && clientX <= left + width
+        && top - height <= clientY
+        && clientY <= top + height
+      )
+      if (clicked) {
+        ev.stopPropagation()
+        ev.preventDefault()
+        this.toggleCollapse(parent)
+      }
+    })
+  }
+
+  checkCollapse = el => el.classList.contains(this.className)
+  setCollapse = el => el.classList.add(this.className)
+  cancelCollapse = el => el.classList.remove(this.className)
+  toggleCollapse = el => el.classList.toggle(this.className)
+
+  recordCollapseState = (needChange = true) => {
+    if (needChange) {
+      this.config.RECORD_COLLAPSE = !this.config.RECORD_COLLAPSE
     }
-
-    checkCollapse = ele => ele.classList.contains(this.className)
-    setCollapse = ele => ele.classList.add(this.className)
-    cancelCollapse = ele => ele.classList.remove(this.className)
-    toggleCollapse = ele => ele.classList.toggle(this.className)
-
-    recordCollapseState = (needChange = true) => {
-        if (needChange) {
-            this.config.RECORD_COLLAPSE = !this.config.RECORD_COLLAPSE
-        }
-        if (this.config.RECORD_COLLAPSE) {
-            this.utils.stateRecorder.register({
-                name: this.fixedName,
-                selector: this.selector,
-                stateGetter: this.checkCollapse,
-                stateRestorer: this.setCollapse,
-            })
-        } else {
-            this.utils.stateRecorder.unregister(this.fixedName)
-        }
+    if (this.config.RECORD_COLLAPSE) {
+      this.utils.stateRecorder.register({
+        name: this.fixedName,
+        selector: this.selector,
+        stateGetter: this.checkCollapse,
+        stateRestorer: this.setCollapse,
+      })
+    } else {
+      this.utils.stateRecorder.unregister(this.fixedName)
     }
+  }
 
-    rollback = start => {
-        let cur = start
-        while (cur && (cur = cur.closest(`.${this.className}`))) {
-            this.cancelCollapse(cur)
-            cur = cur.parentElement
-        }
+  rollback = start => {
+    let cur = start
+    while (cur && (cur = cur.closest(`.${this.className}`))) {
+      this.cancelCollapse(cur)
+      cur = cur.parentElement
     }
+  }
 
-    getDynamicActions = () => [{ act_value: "record_collapse_state", act_state: this.config.RECORD_COLLAPSE, act_name: this.i18n.t("$label.RECORD_COLLAPSE") }]
+  getDynamicActions = () => [
+    { act_value: "record_collapse_state", act_state: this.config.RECORD_COLLAPSE, act_name: this.i18n.t("$label.RECORD_COLLAPSE") },
+  ]
 
-    call = action => {
-        if (action === "record_collapse_state") {
-            this.recordCollapseState(true)
-        }
+  call = action => {
+    if (action === "record_collapse_state") {
+      this.recordCollapseState(true)
     }
+  }
 }
 
 module.exports = {
-    plugin: CollapseListPlugin
+  plugin: CollapseListPlugin,
 }

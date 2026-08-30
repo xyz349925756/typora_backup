@@ -1,31 +1,30 @@
 class DarkModePlugin extends BasePlugin {
-    className = "plugin-dark"
-    isDarkMode = this.config.DARK_DEFAULT
+  className = "plugin-dark"
+  _isActive = this.config.DARK_DEFAULT
 
-    styleTemplate = () => true
+  style = () => `@media (prefers-color-scheme: light) { .${this.className} { filter: invert(.9) hue-rotate(.5turn); } }`
 
-    hotkey = () => [{ hotkey: this.config.HOTKEY, callback: this.call }]
+  hotkey = () => [{ hotkey: this.config.HOTKEY, callback: this.call }]
 
-    enableDarkMode = () => this._toggleDarkMode(true)
+  isActive = () => Boolean(this._isActive)
+  enableDark = () => this._toggleDark(true)
+  disableDark = () => this._toggleDark(false)
+  toggleDark = () => {
+    this._toggleDark(!this._isActive)
+    const msg = this.i18n.t(this._isActive ? "modeEnabled" : "modeDisabled")
+    this.utils.notification.show(msg)
+  }
 
-    disableDarkMode = () => this._toggleDarkMode(false)
+  _toggleDark = enable => {
+    document.documentElement.classList.toggle(this.className, enable)
+    this._isActive = enable
+  }
 
-    toggleDarkMode = () => {
-        this._toggleDarkMode(!this.isDarkMode)
-        const msg = this.i18n.t(this.isDarkMode ? "modeEnabled" : "modeDisabled")
-        this.utils.notification.show(msg)
-    }
+  process = () => this._isActive && this.enableDark()
 
-    _toggleDarkMode = enable => {
-        document.documentElement.classList.toggle(this.className, enable)
-        this.isDarkMode = enable
-    }
-
-    process = () => this.isDarkMode && this.enableDarkMode()
-
-    call = (action, meta) => this.toggleDarkMode()
+  call = (action, meta) => this.toggleDark()
 }
 
 module.exports = {
-    plugin: DarkModePlugin,
+  plugin: DarkModePlugin,
 }

@@ -283,10 +283,6 @@ ol {
     /* 30px */
 }
 
-ul {
-    list-style: square;
-}
-
 ol {
     list-style: decimal;
 }
@@ -1014,6 +1010,13 @@ footer.ty-footer {
 
 .clear-btn-icon {
     top: 8px;
+}
+
+.ty-editor-toolbar {
+    background: #2d3033;
+    border: 1px solid rgb(127 127 127 / 50%);
+    filter: drop-shadow(0 1px 2px rgb(0 0 0 / 30%));
+    --text-color: #e8f2fb;
 }
 
 /* try fix https://github.com/typora/typora-issues/issues/5253 */

@@ -20,9 +20,9 @@ if (-not $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Adm
         }
         Start-Process @startProcessParams
     } catch {
-        Write-Host "`nElevation failed or was cancelled by the user. Cannot continue." -ForegroundColor Red
+        Write-Host "`n[ERROR] Elevation failed or was cancelled by the user. Cannot continue." -ForegroundColor Red
         Write-Host "`nPress any key to exit..."
-        $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") | Out-Null
+        try { $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") | Out-Null } catch {}
         exit 1
     }
     exit
@@ -41,56 +41,59 @@ Write-Host ""
 
 try {
     $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
-    $rootDir = (Resolve-Path (Join-Path $scriptDir "..\..")).Path
+    $expectedParent = Join-Path $scriptDir "..\.."
+    if (-not (Test-Path -LiteralPath $expectedParent)) {
+        throw "Execution context error. Please manually move the 'plugin' folder to Typora's installation directory before running this script."
+    }
+    $rootDir = [System.IO.Path]::GetFullPath($expectedParent)
     $paths = [PSCustomObject]@{
-        RootDir         = $rootDir
-        AppDir          = Join-Path -Path $rootDir -ChildPath "app"
-        AppSrcDir       = Join-Path -Path $rootDir -ChildPath "appsrc"
-        PluginDir       = Join-Path -Path $rootDir -ChildPath "plugin"
-        SettingsDir     = Join-Path -Path $rootDir -ChildPath "plugin\global\settings"
-        BasePluginCfg   = Join-Path -Path $rootDir -ChildPath "plugin\global\settings\settings.user.toml"
-        CustomPluginCfg = Join-Path -Path $rootDir -ChildPath "plugin\global\settings\custom_plugin.user.toml"
-        WindowHtml      = Join-Path -Path $rootDir -ChildPath "window.html"
-        WindowHtmlBak   = Join-Path -Path $rootDir -ChildPath "window.html.bak"
+        RootDir       = $rootDir
+        AppDir        = Join-Path -Path $rootDir -ChildPath "app"
+        AppSrcDir     = Join-Path -Path $rootDir -ChildPath "appsrc"
+        PluginDir     = Join-Path -Path $rootDir -ChildPath "plugin"
+        SettingsDir   = Join-Path -Path $rootDir -ChildPath "plugin\global\settings"
+        pluginCfg     = Join-Path -Path $rootDir -ChildPath "plugin\global\settings\settings.user.toml"
+        WindowHtml    = Join-Path -Path $rootDir -ChildPath "window.html"
+        WindowHtmlBak = Join-Path -Path $rootDir -ChildPath "window.html.bak"
     }
 
     Write-Host "[1/6] Validating paths" -ForegroundColor Yellow
-    Write-Host "      -> Assuming Typora root is at '$($paths.RootDir)'."
-    if (!(Test-Path $paths.WindowHtml)) {
-        throw "Could not find 'window.html' at the expected location: '$($paths.WindowHtml)'."
+    Write-Host ("      -> Assuming Typora root is at '{0}'." -f $paths.RootDir)
+    if (!(Test-Path -LiteralPath $paths.WindowHtml)) {
+        throw ("Could not find 'window.html' at the expected location: '{0}'. Please verify that you are running this script in the correct Typora installation path." -f $paths.WindowHtml)
     }
 
     Write-Host "[2/6] Checking Typora version" -ForegroundColor Yellow
     $frameScript = ""
-    if (Test-Path -Path $paths.AppSrcDir) {
+    if (Test-Path -LiteralPath $paths.AppSrcDir) {
         $frameScript = '<script src="./appsrc/window/frame.js" defer="defer"></script>'
         Write-Host "      -> 'appsrc' folder found. Using new version."
-    } elseif (Test-Path -Path $paths.AppDir) {
+    } elseif (Test-Path -LiteralPath $paths.AppDir) {
         $frameScript = '<script src="./app/window/frame.js" defer="defer"></script>'
         Write-Host "      -> 'app' folder found. Using old version."
     } else {
-        throw "Neither 'app' nor 'appsrc' directory could be found in '$($paths.RootDir)'."
+        throw ("Neither 'app' nor 'appsrc' directory could be found in '{0}'. Please verify that you are running this script in the correct Typora installation path." -f $paths.RootDir)
     }
 
     Write-Host "[3/6] Reading and validating 'window.html'" -ForegroundColor Yellow
     $pluginScript = '<script src="./plugin/index.js" defer="defer"></script>'
-    $fileContent = Get-Content -Path $paths.WindowHtml -Encoding UTF8 -Raw
+    $fileContent = Get-Content -LiteralPath $paths.WindowHtml -Encoding UTF8 -Raw
     if ($fileContent -match [Regex]::Escape($pluginScript)) {
         Write-Host "      -> Plugin script Detected."
         Write-Host "`nPlugin has already been installed. Nothing to do." -ForegroundColor Green
         return
     }
     if (!($fileContent -match [Regex]::Escape($frameScript))) {
-        throw "'window.html' does not contain the expected script tag: $frameScript"
+        throw ("'window.html' does not contain the expected script tag: {0}" -f $frameScript)
     }
     Write-Host "      -> Validation successful."
 
     Write-Host "[4/6] Ensuring permissions" -ForegroundColor Yellow
-    if (!(Test-Path -Path $paths.PluginDir -PathType Container)) {
-        throw "Could not find the plugin directory at '$($paths.PluginDir)'."
+    if (!(Test-Path -LiteralPath $paths.PluginDir -PathType Container)) {
+        throw ("Could not find the plugin directory at '{0}'." -f $paths.PluginDir)
     }
-    if (!(Test-Path -Path $paths.SettingsDir -PathType Container)) {
-        throw "Could not find the settings directory at '$($paths.SettingsDir)'."
+    if (!(Test-Path -LiteralPath $paths.SettingsDir -PathType Container)) {
+        throw ("Could not find the settings directory at '{0}'." -f $paths.SettingsDir)
     }
     $usersSid = New-Object System.Security.Principal.SecurityIdentifier([System.Security.Principal.WellKnownSidType]::BuiltinUsersSid, $null)
     $directoryAccessRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
@@ -102,19 +105,18 @@ try {
     )
 
     Write-Host "      -> Processing permissions for 'plugin' directory."
-    $dirAcl = Get-Acl -Path $paths.PluginDir
+    $dirAcl = Get-Acl -LiteralPath $paths.PluginDir
     $dirAcl.SetAccessRule($directoryAccessRule)
     Set-Acl -Path $paths.PluginDir -AclObject $dirAcl
 
     Write-Host "      -> Processing permissions for 'settings' directory."
-    $settingsAcl = Get-Acl -Path $paths.SettingsDir
+    $settingsAcl = Get-Acl -LiteralPath $paths.SettingsDir
     $settingsAcl.SetAccessRule($directoryAccessRule)
     Set-Acl -Path $paths.SettingsDir -AclObject $settingsAcl
 
     Write-Host "      -> Processing permissions for settings files."
     $filesToProcess = @(
-        $paths.BasePluginCfg
-        $paths.CustomPluginCfg
+        $paths.pluginCfg
     )
     $fileAccessRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
         $usersSid,
@@ -123,24 +125,27 @@ try {
     )
     foreach ($file in $filesToProcess) {
         $fileName = Split-Path $file -Leaf
-        if (Test-Path -Path $file -PathType Leaf) {
-            Write-Host "         -> Processing '$fileName'."
-            $acl = Get-Acl -Path $file
+        if (Test-Path -LiteralPath $file -PathType Leaf) {
+            Write-Host ("         -> Processing '{0}'." -f $fileName)
+            $acl = Get-Acl -LiteralPath $file
             $acl.ResetAccessRule($fileAccessRule)
             Set-Acl -Path $file -AclObject $acl
         } else {
-            Write-Warning "         -> $fileName not found. Skipping."
+            Write-Warning ("         -> {0} not found. Skipping." -f $fileName)
         }
     }
 
-    Write-Host "[5/6] Backing up 'window.html' to '$($paths.WindowHtmlBak)'" -ForegroundColor Yellow
-    Copy-Item -Path $paths.WindowHtml -Destination $paths.WindowHtmlBak -Force
+    Write-Host ("[5/6] Backing up 'window.html' to '{0}'" -f $paths.WindowHtmlBak) -ForegroundColor Yellow
+    Copy-Item -LiteralPath $paths.WindowHtml -Destination $paths.WindowHtmlBak -Force
     Write-Host "      -> Backup complete."
 
     Write-Host "[6/6] Injecting plugin script" -ForegroundColor Yellow
     $replacement = $frameScript + $pluginScript
     $newFileContent = $fileContent -replace [Regex]::Escape($frameScript), $replacement
-    Set-Content -Path $paths.WindowHtml -Value $newFileContent -Encoding UTF8 -NoNewline
+
+    $utf8NoBom = New-Object System.Text.UTF8Encoding $false
+    [System.IO.File]::WriteAllText($paths.WindowHtml, $newFileContent, $utf8NoBom)
+
     Write-Host "      -> Injection complete."
 
     Write-Host "`nPlugin installed successfully! Please restart Typora." -ForegroundColor Green
@@ -150,5 +155,5 @@ try {
     Write-Host "`nInstallation failed." -ForegroundColor Red
 } finally {
     Write-Host "`nPress any key to exit..."
-    $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") | Out-Null
+    try { $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") | Out-Null } catch {}
 }

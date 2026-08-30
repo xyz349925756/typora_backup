@@ -9,7 +9,7 @@
 
 [global]
 # =========== [ Basic ] ===========
-# Master switch. Enables or disables the plugin system
+# Master Switch. Enables or disables the plugin system
 ENABLE = true
 
 # Locale
@@ -18,6 +18,12 @@ ENABLE = true
 #   zh-CN: 简体中文
 #   zh-TW: 繁體中文
 LOCALE = "auto"
+
+# Dark Mode
+DARK_MODE = false
+
+# Debug Logging
+LOGGING = false
 
 # =========== [ Chart Interaction ] ===========
 # Exit methods for chart interaction mode (e.g., kanban, markmap)
@@ -84,9 +90,6 @@ CTRL_CLICK_TO_NEW_WINDOW = true
 # Wheel to scroll tab bar: Enable horizontal scrolling on the tab bar using the mouse wheel
 WHEEL_TO_SCROLL_TAB_BAR = true
 
-# Ctrl+Wheel to switch tabs: Quickly switch active tabs using Ctrl+Wheel
-CTRL_WHEEL_TO_SWITCH = false
-
 # Middle click to close tab: Close tabs using the middle mouse button
 MIDDLE_CLICK_TO_CLOSE = true
 
@@ -112,8 +115,8 @@ TAB_SWITCH_ON_CLOSE = "right"
 #   exit     : Exit Typora immediately
 LAST_TAB_CLOSE_ACTION = "blankPage"
 
-# Reopen unclosed tabs on startup: Restores tabs on next launch.
-# Requires Typora's native setting "Open specific folder / Reopen last directory" to be enabled
+# Reopen unclosed tabs on startup: Restores tabs on next launch
+# Disabled when opening specific files on startup
 REOPEN_TABS_ON_STARTUP = false
 
 # =========== [ Hotkeys ] ===========
@@ -168,11 +171,16 @@ CONCURRENCY_LIMIT = 20
 # Follow symbolic links during traversal. Note: High risk of infinite loops with circular symlinks
 FOLLOW_SYMBOLIC_LINKS = false
 
-# Stop searching on hiding window: Terminate active searches when the window is hidden to save resources
-STOP_SEARCHING_ON_HIDING = true
+# When to display the search explanation bubble
+#   focus: On Input / Focus
+#   hover: On Mouse Hover
+EXPLAIN_TRIGGER = ["focus"]
 
 # Max execution time (ms): Prevents search deadlocks. Set to -1 for unlimited
 TIMEOUT = 60000
+
+# Match Anchor: highlights strictly respect the spatial boundaries of specific Markdown elements. When disabled, matches will be globally highlighted anywhere in the text
+HIGHLIGHTS_MATCH_ANCHOR = true
 
 # Traverse strategy
 #   bfs: Breadth-First Search
@@ -198,10 +206,7 @@ RELATIVE_PATH = true
 # Show file extension: Display extensions (e.g., .md) after file titles
 SHOW_EXT = true
 
-# Show modified time: Display the modification time on hover
-SHOW_MTIME = false
-
-# Highlight colors: Background colors for keywords
+# Highlight colors: Background colors for highlights
 HIGHLIGHT_COLORS = [
   "#BBEEFF", "#FFBBCC", "#88EE88", "#CCBBFF", "#FFEE88", "#FFFFA0", "#88CCCC", "#FFBB88", "#CCCCCC", "#FFAABB",
   "#99CCFF", "#FF99CC", "#66CC66", "#CC99FF", "#FFCC66", "#FFFF80", "#DD9966", "#AAAAAA", "#66AAAA", "#DD6699",
@@ -209,14 +214,6 @@ HIGHLIGHT_COLORS = [
 
 # Max highlights: Limit HTML rendering to preserve performance
 MAX_HIGHLIGHTS = 5000
-
-# Hide button hint: Remove tooltip text when hovering over tool buttons
-HIDE_BUTTON_HINT = false
-
-# =========== [ Advanced ] ===========
-# Optimize Search (AST Reordering): Reorder search conditions using short-circuit evaluation. Prioritizes low-cost queries (e.g., size, mtime) over high-cost queries (e.g., content, h1)
-# Note: Enabling this may alter the highlight color assignment order of keywords
-OPTIMIZE_SEARCH = false
 
 
 [commander]
@@ -231,14 +228,14 @@ BACKSPACE_TO_HIDE = false
 
 # =========== [ Command Display ] ===========
 # Output display mode for shortcut-triggered commands
-#   always: Always show output modal after execution
-#   error : Show output modal only on error
+#   always: Always show output panel after execution
+#   error : Show output panel only on error
 #   silent: Silent execution, hide output
 #   echo  : Stream output immediately (Ideal for long-running/streaming tasks)
 QUICK_RUN_DISPLAY = "error"
 
 # Output display mode for panel-triggered commands
-#   always: Show output modal after completion
+#   always: Show output panel after completion
 #   echo  : Stream output immediately
 COMMIT_RUN_DISPLAY = "echo"
 
@@ -246,20 +243,28 @@ COMMIT_RUN_DISPLAY = "echo"
 # Predefined command list
 #   name   : Unique identifier for the plugin menu
 #   disable: Switch for this specific command
-#   shell  : Target shell (Supported: "cmd/bash", "powershell", "gitbash", "wsl")
+#   shell  : Target shell (Supported: cmd/bash, powershell, gitbash, wsl, sh, zsh, nushell, python, nodejs, r, julia)
 #   hotkey : (Optional) Execution shortcut
 #   cmd    : Execution string
 # Built-in environment variables:
-#   $f: Absolute path of the current file
-#   $d: Directory of the current file
-#   $m: Current mount directory in Typora's sidebar
+#   f: Absolute path of the current file
+#   d: Directory of the current file
+#   m: Current mount directory in Typora's sidebar
 BUILTIN = [
-  { name = "Default", disable = false, shell = "cmd/bash", cmd = "" },
-  { name = "Explorer", disable = false, shell = "powershell", cmd = "explorer $d" },
-  { name = "VScode", disable = false, shell = "cmd/bash", cmd = "code $f" },
-  { name = "Windows Terminal", disable = false, shell = "cmd/bash", cmd = "cd $d && wt" },
-  { name = "Git Commit", disable = false, shell = "cmd/bash", cmd = 'cd $m && git add . && git commit -m "update"' },
+  { name = "Explorer", disable = false, shell = "powershell", cmd = "explorer $env:d" },
+  { name = "VScode", disable = false, shell = "cmd/bash", cmd = "code %f%" },
+  { name = "Terminal", disable = false, shell = "cmd/bash", cmd = "wt" },
 ]
+
+# Post-Execution Script. JavaScript code to execute after the command finishes
+POST_SCRIPT = "({ command, cwd, options, error, code, stdout, stderr }) => null"
+
+# Max capacity limit for command history
+MAX_HISTORY_ENTRIES = 20
+
+# =========== [ Advanced ] ===========
+# Maximum allowed execution time in milliseconds. Set to 0 for no limit
+TIMEOUT = 0
 
 
 [command_palette]
@@ -273,7 +278,7 @@ HOTKEY = "ctrl+shift+p"
 BACKSPACE_TO_HIDE = true
 
 # =========== [ Search Strategy ] ===========
-# Wait time after typing stops before triggering a search (ms, Short intervals recommended for memory-level search)
+# Wait time after typing stops before triggering a search (ms, Short intervals recommended due to memory-level search)
 DEBOUNCE_INTERVAL = 70
 
 
@@ -297,7 +302,13 @@ REMOVE_HEADER_STYLES = true
 TITLE_BAR_BUTTONS = ["header", "image", "table", "fence", "link", "math"]
 
 # Include H1 and H2 elements in specific elements of the outline
-INCLUDE_HEADINGS = { fence = true, image = true, table = true, link = true, math = true }
+INCLUDE_HEADINGS = {
+  fence = true,
+  image = true,
+  table = true,
+  link = true,
+  math = true,
+}
 
 # =========== [ Interaction ] ===========
 # Allow drag-and-drop operations on outline titles to rearrange document structure
@@ -318,8 +329,8 @@ DEFAULT_WIDTH_PERCENT = 20
 # =========== [ Basic ] ===========
 ENABLE = true
 NAME = ""
-HOTKEY = ""          # Hotkey: Popup
-HOTKEY_FIX_LINT = "" # Hotkey: Fix
+HOTKEY = ""           # Hotkey: Popup
+HOTKEY_FIX_LINT = ""  # Hotkey: Fix
 
 # =========== [ Custom Rules ] ===========
 # Array of paths linking to custom lint rule JS modules (Relative to plugin directory)
@@ -330,7 +341,17 @@ CUSTOM_RULE_FILES = [
 
 # Lint rules
 # See: https://github.com/DavidAnson/markdownlint/blob/main/doc/Rules.md
-RULE_CONFIG = { default = true, MD010 = { code_blocks = false }, MD012 = { maximum = 3 }, MD013 = false, MD024 = { siblings_only = true }, MD033 = false, MD041 = false, MD044 = { code_blocks = false, names = ["CSS", "C++", "HTML", "Java", "JavaScript", "Python", "Rust", "SQL", "TypeScript"] }, MD060 = false }
+RULE_CONFIG = {
+  default = true,
+  MD010 = { code_blocks = false },
+  MD012 = { maximum = 3 },
+  MD013 = false,
+  MD024 = { siblings_only = true },
+  MD033 = false,
+  MD041 = false,
+  MD044 = { code_blocks = false, names = ["CSS", "C++", "HTML", "Java", "JavaScript", "Python", "Rust", "SQL", "TypeScript"] },
+  MD060 = false,
+}
 
 # =========== [ UI Elements & Styling ] ===========
 # Translate English rule text to target locale
@@ -342,7 +363,7 @@ TRANSLATE = true
 #   fixAll          : Batch Fix Errors
 #   toggleSourceMode: Toggle Source Mode
 #   refresh         : Manual Force Refresh
-#   close           : Close Modal
+#   close           : Close Panel
 TITLE_BAR_BUTTONS = ["settings", "fixAll", "toggleSourceMode", "refresh", "close"]
 
 # Master list table columns to display
@@ -354,10 +375,10 @@ TITLE_BAR_BUTTONS = ["settings", "fixAll", "toggleSourceMode", "refresh", "close
 COLUMNS = ["line", "rule", "desc", "ops"]
 
 # Executable actions for individual error row items
-#   info  : View Lint Doc
-#   locate: Scroll to Line
-#   fix   : Fix Error
-TOOLS = ["info", "locate", "fix"]
+#   detailSingle: View Lint Doc
+#   jumpToLine  : Scroll to Line
+#   fixSingle   : Fix Error
+ROW_OPERATIONS = ["jumpToLine", "fixSingle"]
 
 # Default result sorting rule
 #   idx       : Sort by index
@@ -380,7 +401,7 @@ BUTTON_HEIGHT = "16px"
 BUTTON_BORDER_RADIUS = "50%"
 
 # Button distance from the right window edge
-BUTTON_RIGHT = "11px"
+BUTTON_RIGHT = "5px"
 
 # Button opacity (0.0 ~ 1.0)
 BUTTON_OPACITY = 1
@@ -392,11 +413,14 @@ BUTTON_PASS_COLOR = "#92C498"
 BUTTON_ERROR_COLOR = "#d8bd74"
 
 # =========== [ Shortcuts ] ===========
-# Right-click in the results table to toggle Source Mode
-RIGHT_CLICK_TABLE_TO_TOGGLE_SOURCE_MODE = true
+# Left-click the row action(Keys mirror ROW_OPERATIONS)
+LEFT_CLICK_ROW_ACTION = "jumpToLine"
 
-# Right-click the indicator button to fix all errors
-RIGHT_CLICK_BUTTON_TO_FIX = true
+# Right-click the table action(Keys mirror TITLE_BAR_BUTTONS)
+RIGHT_CLICK_TABLE_ACTION = "toggleSourceMode"
+
+# Right-click the indicator action(Keys mirror TITLE_BAR_BUTTONS)
+RIGHT_CLICK_INDICATOR_ACTION = "fixAll"
 
 
 [md_padding]
@@ -566,7 +590,10 @@ NAME = ""
 # Mouse wheel modifier keys
 #   TEMPORARY : Temporarily scale image size in the current view (e.g., "alt" = Alt+Wheel)
 #   PERSISTENT: Persistently scale image size by converting Markdown images to HTML with explicit dimensions (e.g., "ctrl" = Ctrl+Wheel)
-MODIFIER_KEY = { TEMPORARY = "alt", PERSISTENT = "" }
+MODIFIER_KEY = {
+  TEMPORARY = "alt",
+  PERSISTENT = "",
+}
 
 # =========== [ Boundaries & Alignment ] ===========
 # Allow exceed limit: Permit images to scale beyond the parent container or screen viewport width
@@ -623,7 +650,7 @@ DEFAULT_ORDER = false
 # Enable searching: Display an instant content filter search box above the table
 SEARCHING = true
 
-# Case insensitive search
+# Case-insensitive search
 CASE_INSENSITIVE = true
 
 # Enable regex search: Support advanced regex rules within the search box
@@ -669,10 +696,10 @@ FIX_SKIPPED_LEVEL_HEADERS = true
 # Strip visual styling markers (e.g., **bold**, `code`) from MindMap nodes
 REMOVE_HEADER_STYLES = true
 
-# Auto fit window size: Triggered on diagram data updates
+# Auto-fit window size: Triggered on diagram data updates
 AUTO_FIT_ON_UPDATE = true
 
-# Auto fit window size: Triggered on node fold/expand actions
+# Auto-fit window size: Triggered on node fold/expand actions
 AUTO_FIT_WHEN_FOLD = true
 
 # Preserve user fold states during diagram update/redraws
@@ -722,7 +749,22 @@ CANDIDATE_COLOR_SCHEMES = [
 #   spacingVertical   : Vertical node spacing
 #   paddingX          : Node internal padding
 #   fitRatio          : Window fill ratio margin
-DEFAULT_TOC_OPTIONS = { duration = 500, initialExpandLevel = -1, maxInitialScale = 2, maxWidth = 0, nodeMinHeight = 16, spacingHorizontal = 80, spacingVertical = 5, fitRatio = 0.95, paddingX = 8, colorFreezeLevel = 7, zoom = true, pan = true, toggleRecursively = false, color = ["#1F77B4", "#FF7F0E", "#2CA02C", "#D62728", "#9467BD", "#8C564B", "#E377C2", "#7F7F7F", "#BCBD22", "#17BECF"] }
+DEFAULT_TOC_OPTIONS = {
+  duration = 500,
+  initialExpandLevel = -1,
+  maxInitialScale = 2,
+  maxWidth = 0,
+  nodeMinHeight = 16,
+  spacingHorizontal = 80,
+  spacingVertical = 5,
+  fitRatio = 0.95,
+  paddingX = 8,
+  colorFreezeLevel = 7,
+  zoom = true,
+  pan = true,
+  toggleRecursively = false,
+  color = ["#1F77B4", "#FF7F0E", "#2CA02C", "#D62728", "#9467BD", "#8C564B", "#E377C2", "#7F7F7F", "#BCBD22", "#17BECF"],
+}
 
 # Customize exported SVG/Image settings
 #   FILENAME: Output filename format. Supported placeholders
@@ -746,7 +788,22 @@ DEFAULT_TOC_OPTIONS = { duration = 500, initialExpandLevel = -1, maxInitialScale
 #   OPEN_CIRCLE_COLOR: Color of expanded node indicators
 #   SHOW_PATH_INQUIRY_DIALOG: Prompt directory selection dialog before saving
 #   SHOW_IN_FINDER: Automatically open the output directory after saving
-DOWNLOAD_OPTIONS = { FILENAME = "{{filename}}_{{timestamp}}.svg", FOLDER = "", REMOVE_USELESS_CLASSES = true, REMOVE_FOREIGN_OBJECT = false, PADDING_HORIZONTAL = 25, PADDING_VERTICAL = 25, IMAGE_SCALE = 2, IMAGE_QUALITY = 0.92, KEEP_ALPHA_CHANNEL = true, BACKGROUND_COLOR = "#FFFFFF", TEXT_COLOR = "#333333", OPEN_CIRCLE_COLOR = "#FFFFFF", SHOW_PATH_INQUIRY_DIALOG = true, SHOW_IN_FINDER = true }
+DOWNLOAD_OPTIONS = {
+  FILENAME = "{{filename}}_{{timestamp}}.svg",
+  FOLDER = "",
+  REMOVE_USELESS_CLASSES = true,
+  REMOVE_FOREIGN_OBJECT = false,
+  PADDING_HORIZONTAL = 25,
+  PADDING_VERTICAL = 25,
+  IMAGE_SCALE = 2,
+  IMAGE_QUALITY = 0.92,
+  KEEP_ALPHA_CHANNEL = true,
+  BACKGROUND_COLOR = "#FFFFFF",
+  TEXT_COLOR = "#333333",
+  OPEN_CIRCLE_COLOR = "#FFFFFF",
+  SHOW_PATH_INQUIRY_DIALOG = true,
+  SHOW_IN_FINDER = true,
+}
 
 # =========== [ Fence MindMap (Code Block) ] ===========
 # Enable Fence Markmap (If false, all Fence-related configurations below are disabled)
@@ -765,13 +822,30 @@ INTERACTIVE_MODE = true
 DEFAULT_FENCE_HEIGHT = "300px"
 
 # Default background color for the Fence Diagram
-DEFAULT_FENCE_BACKGROUND_COLOR = "#F8F8F8"
+DEFAULT_FENCE_BACKGROUND_COLOR = "transparent"
 
 # Default Fence Options: Customize appearance and behavior
 #   height         : structural height for the Fence Diagram
 #   backgroundColor: background color for the Fence Diagram
 #   Other Keys mirror DEFAULT_TOC_OPTIONS
-DEFAULT_FENCE_OPTIONS = { duration = 500, initialExpandLevel = -1, maxInitialScale = 2, colorFreezeLevel = 7, zoom = false, pan = false, toggleRecursively = false, maxWidth = 0, nodeMinHeight = 16, spacingHorizontal = 80, spacingVertical = 5, paddingX = 8, fitRatio = 0.95, height = "300px", backgroundColor = "#F8F8F8", color = ["#1F77B4", "#FF7F0E", "#2CA02C", "#D62728", "#9467BD", "#8C564B", "#E377C2", "#7F7F7F", "#BCBD22", "#17BECF"] }
+DEFAULT_FENCE_OPTIONS = {
+  duration = 500,
+  initialExpandLevel = -1,
+  maxInitialScale = 2,
+  colorFreezeLevel = 7,
+  zoom = false,
+  pan = false,
+  toggleRecursively = false,
+  maxWidth = 0,
+  nodeMinHeight = 16,
+  spacingHorizontal = 80,
+  spacingVertical = 5,
+  paddingX = 8,
+  fitRatio = 0.95,
+  height = "300px",
+  backgroundColor = "#FFFFFF",
+  color = ["#1F77B4", "#FF7F0E", "#2CA02C", "#D62728", "#9467BD", "#8C564B", "#E377C2", "#7F7F7F", "#BCBD22", "#17BECF"],
+}
 
 # Template content injection when generating code blocks
 FENCE_TEMPLATE = """
@@ -793,7 +867,7 @@ markmap:
   color: ["#4E79A7", "#F28E2C", "#E15759", "#76B7B2", "#59A14F", "#EDC949", "#AF7AA1", "#FF9DA7", "#9C755F", "#BAB0AB"]
   duration: 500
   height: 300px
-  backgroundColor: "#F8F8F8"
+  backgroundColor: transparent
 ---
 
 ## Links
@@ -829,12 +903,12 @@ NAME = ""
 
 # =========== [ Scope ] ===========
 # Master switches for injecting incremental numbers into specific UI/Document levels
-ENABLE_OUTLINE = true # Sidebar outline tree
-ENABLE_CONTENT = true # Document content headings
-ENABLE_TOC = false    # Document TOC component
-ENABLE_TABLE = false  # Table captions
-ENABLE_IMAGE = false  # Image captions
-ENABLE_FENCE = false  # Code block captions
+ENABLE_OUTLINE = true  # Sidebar outline tree
+ENABLE_CONTENT = true  # Document content headings
+ENABLE_TOC = false     # Document TOC component
+ENABLE_TABLE = false   # Table captions
+ENABLE_IMAGE = false   # Image captions
+ENABLE_FENCE = false   # Code block captions
 
 # =========== [ Styling & Alignment ] ===========
 # Show image file alias alongside image numbers (Performance intensive; use with caution)
@@ -863,15 +937,15 @@ ENABLE_WHEN_EXPORT = true
 # Requires ENABLE_WHEN_EXPORT = true
 APPLY_EXPORT_HEADER_NUMBERING = """
 (headers) => {
-    const counters = Array(7).fill(0)
-    headers.forEach(header => {
-        const [level, text, ...rest] = header
-        counters[level]++
-        counters.fill(0, level + 1)
-        const counter = counters.slice(2, level + 1).join('.')
-        const numbering = counter ? `${counter}. ` : ""
-        header[1] = numbering + text
-    })
+  const counters = Array(7).fill(0)
+  headers.forEach(header => {
+    const [level, text, ...rest] = header
+    counters[level]++
+    counters.fill(0, level + 1)
+    const counter = counters.slice(2, level + 1).join('.')
+    const numbering = counter ? `${counter}. ` : ""
+    header[1] = numbering + text
+  })
 }
 """
 
@@ -881,7 +955,7 @@ APPLY_EXPORT_HEADER_NUMBERING = """
 #
 # Syntax Schema (Inspired by Python f-strings):
 #   Format: "Prefix{CounterName:CounterStyle}Suffix"
-#   Example: image = "Figure {i:cjk}" -> Figure 一, Figure 二..
+#   Example: image = "Figure {i:cjk}" -> Figure 一, Figure 二
 #
 # Multi-Counter Combination:
 #   Example: content-h4 = "{c2:ua}-{c3:cjk}.{c4:ur}" -> B-五.III
@@ -1080,8 +1154,8 @@ BUTTON_OPACITY = 0.5
 # Button hover opacity (0.0 ~ 1.0)
 BUTTON_OPACITY_HOVER = 0.8
 
-# Disable tooltip hint text on hover
-HIDE_BUTTON_HINT = false
+# Show tooltip on hover
+SHOW_BUTTON_HINT = true
 
 # Show buttons exclusively when the cursor enters the code block bounds
 AUTO_HIDE = false
@@ -1210,7 +1284,7 @@ HIGHLIGHT_BY_LANGUAGE = false
 NUMBERING_BASE = "1-based"
 
 # Highlight metadata regex capture pattern
-HIGHLIGHT_PATTERN = '^(?<lang>[^{}]+){(?<line>[\d\s,-]+)}$'
+HIGHLIGHT_PATTERN = '^(?<lang>[^{}]+){(?<line>[\d\s,-]+)}'
 
 # Render background color for language-based line highlights
 HIGHLIGHT_LINE_COLOR_BY_LANGUAGE = "rgba(142, 150, 170, 0.14)"
@@ -1226,6 +1300,14 @@ HIGHLIGHT_ON_FOCUS = false
 
 # Highlight line background color on cursor focus
 HIGHLIGHT_LINE_COLOR_ON_FOCUS = "rgba(142, 150, 170, 0.14)"
+
+# =========== [ Code Title ] ===========
+# Enable code title
+# See: https://vuepress.vuejs.org/guide/markdown.html#code-title
+ENABLE_CODE_TITLE = false
+
+# Code title metadata regex capture pattern
+CODE_TITLE_PATTERN = '.+?\s+title="(?<title>[^"]+)"'
 
 # =========== [ Advanced ] ===========
 # Auto-align wrapped lines: Maintain proper indentation for long, wrapped text lines. Note: High rendering performance cost
@@ -1263,12 +1345,17 @@ RECORD_COLLAPSE = true
 # =========== [ Modifier Key Combos ] ===========
 # Bind modifier keys (Ctrl/Alt/Shift) + LClick to dedicated folding mechanisms. Leave empty to disable
 # Example: "ctrl+alt". Hold Ctrl+Alt and click a heading to collapse its siblings
-#   COLLAPSE_SINGLE       : Fold/Expand single section
-#   COLLAPSE_SIBLINGS     : Fold/Expand all sibling sections under parent
-#   COLLAPSE_ALL_SIBLINGS : Fold/Expand all sibling sections in current file
-#   COLLAPSE_RECURSIVE    : Recursively fold/expand current section
+#   COLLAPSE_SINGLE      : Fold/Expand single section
+#   COLLAPSE_SIBLINGS    : Fold/Expand all sibling sections under parent
+#   COLLAPSE_ALL_SIBLINGS: Fold/Expand all sibling sections in current file
+#   COLLAPSE_RECURSIVE   : Recursively fold/expand current section
 # Avoid "alt" (used by Bookmark plugin) and "shift" (used by OS selection)
-MODIFIER_KEY = { COLLAPSE_SINGLE = "ctrl", COLLAPSE_SIBLINGS = "ctrl+alt", COLLAPSE_ALL_SIBLINGS = "ctrl+shift+alt", COLLAPSE_RECURSIVE = "" }
+MODIFIER_KEY = {
+  COLLAPSE_SINGLE = "ctrl",
+  COLLAPSE_SIBLINGS = "ctrl+alt",
+  COLLAPSE_ALL_SIBLINGS = "ctrl+shift+alt",
+  COLLAPSE_RECURSIVE = "",
+}
 
 
 [collapse_list]
@@ -1319,7 +1406,7 @@ TOOL_POSITION = "top"
 #   inViewBoxImage     : First image within the current viewport
 #   closestViewBoxImage: Image closest to the center of the viewport
 #   firstImage         : First image in the entire document
-FIRST_IMAGE_STRATEGIES = ["inViewBoxImage", "firstImage"]
+FIRST_IMAGE_STRATEGIES = ["inViewBoxImage", "closestViewBoxImage"]
 
 # Image information displayed on the left side of the toolbar
 #   index: Image Index
@@ -1340,7 +1427,7 @@ SKEW_SCALE = 1
 # Translation distance per action (px)
 TRANSLATE_SCALE = 10
 
-# Auto-play carousel interval (Seconds)
+# Autoplay carousel interval (Seconds)
 AUTO_PLAY_INTERVAL = 3
 
 # =========== [ Visual Effects ] ===========
@@ -1489,7 +1576,7 @@ RETAIN_LENGTH = 80
 
 [export_enhance]
 # =========== [ Basic ] ===========
-ENABLE = true
+ENABLE = false
 NAME = ""
 
 # =========== [ Network Image ] ===========
@@ -1648,7 +1735,11 @@ COLOR_TABLE = [
 #   FOREGROUND: Default foreground color
 #   BACKGROUND: Default background color
 #   BORDER    : Default border color
-DEFAULT_COLORS = { FOREGROUND = "#330000", BACKGROUND = "#FFFFFF", BORDER = "#330000" }
+DEFAULT_COLORS = {
+  FOREGROUND = "#330000",
+  BACKGROUND = "#FFFFFF",
+  BORDER = "#330000",
+}
 
 
 [cipher]
@@ -1669,8 +1760,8 @@ DECRYPT_HOTKEY = ""
 SECRET_KEY = "n0hLis5FjgQxa3f31sSa2wm37J81g3upTlq9it9WlfK"
 
 # =========== [ Interaction ] ===========
-# Display a confirmation modal after encryption/decryption
-SHOW_HINT_MODAL = true
+# Display a confirmation dialog after encryption/decryption
+SHOW_HINT_DIALOG = true
 
 
 [easy_modify]
@@ -1719,16 +1810,6 @@ HOTKEY_CONVERT_IMAGE_TO_BASE64 = ""
 HOTKEY_CONVERT_ALL_IMAGES_TO_BASE64 = ""
 
 
-[custom]
-# =========== [ Basic ] ===========
-ENABLE = true
-NAME = ""
-
-# =========== [ Hide Plugins ] ===========
-# Hide temporarily unavailable custom plugins from the Context Menu
-HIDE_DISABLE_PLUGINS = false
-
-
 [action_buttons]
 # =========== [ Basic ] ===========
 ENABLE = true
@@ -1744,13 +1825,13 @@ SUPPORT_RIGHT_CLICK = true
 BUTTON_SIZE = "35px"
 
 # Inner icon size
-BUTTON_ICON_SIZE = "17px"
+BUTTON_ICON_SIZE = "16px"
 
 # Border radius
-BUTTON_BORDER_RADIUS = "4px"
+BUTTON_BORDER_RADIUS = "8px"
 
 # Box shadow
-BUTTON_BOX_SHADOW = "0 1px 20px 0 rgba(0, 0, 0, 0.1), inset 0 -1px 0 0 rgba(0, 0, 0, 0.1)"
+BUTTON_BOX_SHADOW = "0 4px 12px -2px rgba(0, 0, 0, 0.15), inset 0 1px 1px 0 rgba(255, 255, 255, 0.5), inset 0 -1px 1px 0 rgba(0, 0, 0, 0.05)"
 
 # Box shadow on hover
 BUTTON_BOX_SHADOW_ON_HOVER = "0 2px 10px 3px rgba(0, 0, 0, .15)"
@@ -1764,30 +1845,24 @@ POSITION_RIGHT = "30px"
 # Margin distance from the bottom edge of the viewport
 POSITION_BOTTOM = "50px"
 
-# Disable tooltips (Blocks the 'hint' property of BUTTONS)
-HIDE_BUTTON_HINT = false
-
 # =========== [ Preset Buttons ] ===========
 # Matrix for preset action buttons
 #   enable    : Enable this button
 #   coordinate: Grid coordinates [X, Y] (0-indexed. Positive X is upward, positive Y is leftward)
 #   icon      : CSS Icon class (Supports Font Awesome 4.1.0 & ionicons 2.0.1)
-#   size      : (Optional) Icon size (Defaults to 17px)
+#   size      : (Optional) Icon size (Defaults to `BUTTON_ICON_SIZE`)
 #   color     : (Optional) Icon color (Defaults to current theme)
 #   bgColor   : (Optional) Background color (Defaults to current theme)
 #   hint      : (Optional) Tooltip text
 #   callback  : System Callback. Format: "PluginName.MethodName"
 #   evil      : Custom Callback. Executable eval() statement. Overrides 'callback' if configured
 BUTTONS = [
-  { enable = true, coordinate = [0, 0], size = "24px", icon = "fa fa-caret-down", evil = "() => this.utils.jumpToEdge(false)" },
-  { enable = true, coordinate = [1, 0], size = "24px", icon = "fa fa-caret-up", evil = "() => this.utils.jumpToEdge(true)" },
-  { enable = true, coordinate = [2, 0], size = "17px", icon = "fa fa-font", callback = "text_stylize.call" },
-  { enable = true, coordinate = [3, 0], size = "17px", icon = "fa fa-indent", callback = "md_padding.call" },
-  { enable = true, coordinate = [4, 0], size = "17px", icon = "fa fa-gear", callback = "preferences.call" },
-  { enable = true, coordinate = [0, 1], size = "17px", icon = "fa fa-sitemap fa-rotate-270", callback = "markmap.onButtonClick" },
-  { enable = true, coordinate = [1, 1], size = "17px", icon = "fa fa-image", callback = "image_viewer.call" },
-  { enable = true, coordinate = [2, 1], size = "17px", icon = "fa fa-th-list", callback = "right_outline.call" },
-  { enable = true, coordinate = [3, 1], size = "17px", icon = "fa fa-search", callback = "search_multi.call" },
+  { enable = true, coordinate = [0, 0], size = "16px", icon = "fa fa-indent", callback = "md_padding.call" },
+  { enable = true, coordinate = [1, 0], size = "16px", icon = "fa fa-search", callback = "search_multi.call" },
+  { enable = true, coordinate = [2, 0], size = "16px", icon = "fa fa-gear", callback = "preferences.call" },
+  { enable = true, coordinate = [0, 1], size = "16px", icon = "fa fa-sitemap fa-rotate-270", callback = "markmap.onButtonClick" },
+  { enable = true, coordinate = [1, 1], size = "16px", icon = "fa fa-image", callback = "image_viewer.call" },
+  { enable = true, coordinate = [2, 1], size = "16px", icon = "fa fa-th-list", callback = "right_outline.call" },
 ]
 
 
@@ -1824,7 +1899,12 @@ POINTER_TYPES = ["mouse"]
 TRIGGER_BUTTONS = ["middle", "right", "x1", "x2"]
 
 # The color of trajectory and hud during a gesture movement
-DEFAULT_COLOR = { middle = "#e0af68", right = "#7dcfff", x1 = "#bb9af7", x2 = "#f7768e" }
+DEFAULT_COLOR = {
+  middle = "#e0af68",
+  right = "#7dcfff",
+  x1 = "#bb9af7",
+  x2 = "#f7768e",
+}
 
 # =========== [ Presets Gestures ] ===========
 # Registry of preset gestures
@@ -1835,14 +1915,14 @@ DEFAULT_COLOR = { middle = "#e0af68", right = "#7dcfff", x1 = "#bb9af7", x2 = "#
 #   cooldown: Cooldown time to prevent accidental rapid consecutive executions (ms, Defaults to 0)
 #   callback: Executable eval() statement
 GESTURES = [
-  { enable = true, button = "x1", path = "→", name = "Latest Tab", cooldown = 0, execute = "() => this.utils.getBasePlugin('window_tab')?.tab?.switchToLastActive()" },
-  { enable = true, button = "right", path = "→", name = "Next Tab", cooldown = 0, execute = "() => this.utils.getBasePlugin('window_tab')?.tab?.next()" },
-  { enable = true, button = "right", path = "←", name = "Previous Tab", cooldown = 0, execute = "() => this.utils.getBasePlugin('window_tab')?.tab?.previous()" },
-  { enable = true, button = "right", path = "→←", name = "First Tab", cooldown = 0, execute = "() => this.utils.getBasePlugin('window_tab')?.tab?.first()" },
-  { enable = true, button = "right", path = "←→", name = "Last Tab", cooldown = 0, execute = "() => this.utils.getBasePlugin('window_tab')?.tab?.last()" },
-  { enable = true, button = "right", path = "↓→", name = "Close Tab", cooldown = 0, execute = "() => this.utils.getBasePlugin('window_tab')?.tab?.closeActive()" },
-  { enable = true, button = "right", path = "→↓→", name = "Open In Finder", cooldown = 0, execute = "() => this.utils.showInFinder(this.utils.getBasePlugin('window_tab')?.tab?.current?.path)" },
-  { enable = true, button = "right", path = "↑→↓", name = "Toggle Tab Bar", cooldown = 0, execute = "() => this.utils.getBasePlugin('window_tab')?.forceToggleTabBar()" },
+  { enable = true, button = "x1", path = "→", name = "Latest Tab", cooldown = 0, execute = "() => this.utils.getPlugin('window_tab')?.tab?.switchToLastActive()" },
+  { enable = true, button = "right", path = "→", name = "Next Tab", cooldown = 0, execute = "() => this.utils.getPlugin('window_tab')?.tab?.next()" },
+  { enable = true, button = "right", path = "←", name = "Previous Tab", cooldown = 0, execute = "() => this.utils.getPlugin('window_tab')?.tab?.previous()" },
+  { enable = true, button = "right", path = "→←", name = "First Tab", cooldown = 0, execute = "() => this.utils.getPlugin('window_tab')?.tab?.first()" },
+  { enable = true, button = "right", path = "←→", name = "Last Tab", cooldown = 0, execute = "() => this.utils.getPlugin('window_tab')?.tab?.last()" },
+  { enable = true, button = "right", path = "↓→", name = "Close Tab", cooldown = 0, execute = "() => this.utils.getPlugin('window_tab')?.tab?.closeActive()" },
+  { enable = true, button = "right", path = "→↓→", name = "Open In Finder", cooldown = 0, execute = "() => this.utils.showInFinder(this.utils.getPlugin('window_tab')?.tab?.current?.path)" },
+  { enable = true, button = "right", path = "↑→↓", name = "Toggle Tab Bar", cooldown = 0, execute = "() => this.utils.getPlugin('window_tab')?.forceToggleTabBar()" },
   { enable = true, button = "right", path = "↗", name = "Maximize Window", cooldown = 0, execute = "() => JSBridge.invoke('window.maximize')" },
   { enable = true, button = "right", path = "↙", name = "Minimize Window", cooldown = 0, execute = "() => JSBridge.invoke('window.minimize')" },
   { enable = true, button = "right", path = "↓←", name = "Exit Typora", cooldown = 0, execute = "() => this.utils.exitTypora()" },
@@ -2078,12 +2158,12 @@ SHOW_PLUGIN_HOTKEY = true
 SHOW_ACTION_OPTIONS_ICON = true
 
 # Prevent the context menu from auto-hiding when it loses focus
-DO_NOT_HIDE = false
+RETAIN_ON_BLUR = false
 
 # Min width constraint for submenus
-#   ""        : Inherits default width (aligns with first-level menu width)
-#   "inherit" : Dynamically adapts to text length
-#   integer   : Specifies a precise pixel value
+#   ""       : Inherits default width (aligns with first-level menu width)
+#   "inherit": Dynamically adapts to text length
+#   integer  : Specifies a precise pixel value
 MENU_MIN_WIDTH = ""
 
 # =========== [ Menu Option ] ===========
@@ -2114,6 +2194,7 @@ LIST = [
   "no_image",
   "myopic_defocus",
   "editor_width_slider",
+  "diagram_enhance",
 ]
 [[right_click_menu.MENUS]]
 NAME = "__EDITING_PLUGINS__"
@@ -2123,6 +2204,7 @@ LIST = [
   "md_padding",
   "text_stylize",
   "markdownlint",
+  "html_editor",
 ]
 [[right_click_menu.MENUS]]
 NAME = "__COMPONENT_PLUGINS__"
@@ -2146,18 +2228,18 @@ LIST = [
 NAME = "__INTERACTIVE_PLUGINS__"
 LIST = [
   "window_tab",
-  "mouse_gestures",
-  "fence_enhance",
   "commander",
+  "fence_enhance",
   "datatables",
   "export_enhance",
+  "mouse_gestures",
   "right_click_menu",
-  "custom",
   "---",
   "search_multi",
   "command_palette",
   "ripgrep",
   "resource_manager",
+  "repository",
   "right_outline",
   "pie_menu",
   "bookmark",
@@ -2200,7 +2282,7 @@ BUTTONS = [
   { ICON = "fa fa-filter", CALLBACK = "resource_manager" },
   { ICON = "fa fa-wrench", CALLBACK = "preferences" },
   { ICON = "fa fa-bookmark", CALLBACK = "bookmark" },
-  { ICON = "fa fa-code", CALLBACK = "commander" }
+  { ICON = "fa fa-code", CALLBACK = "commander" },
 ]
 
 
@@ -2251,7 +2333,7 @@ HOTKEY = ""
 CUSTOM_HOTKEYS = [
   { enable = false, hotkey = "ctrl+shift+e", desc = "Insert JavaScript BlockCode", evil = "() => this.utils.insertFence('javascript')" },
   { enable = false, hotkey = "ctrl+shift+e", desc = "Open Windows Calculator", evil = "() => require('child_process').exec('cmd /C calc')" },
-  { enable = false, hotkey = "ctrl+shift+e", desc = "Switch to the first window tab", evil = "() => this.utils.getBasePlugin('window_tab').tab.switch(0)" },
+  { enable = false, hotkey = "ctrl+shift+e", desc = "Switch to the first window tab", evil = "() => this.utils.getPlugin('window_tab').tab.switch(0)" },
   { enable = false, hotkey = "-", desc = "Pop up a prompt window", evil = "this.utils.eventHub.addEventListener(this.utils.eventHub.eventType.fileOpened, filepath => window.confirm(`You opened the file: ${filepath}`))" },
   { enable = false, hotkey = "ctrl+shift+e", desc = "Insert Kanban BlockCode", plugin = "kanban", function = "callback" },
   { enable = false, hotkey = "ctrl+[", desc = "Folding/unfolding BlockCode", plugin = "fence_enhance", function = "foldFence", closestSelector = "#write .md-fences" },
@@ -2265,18 +2347,15 @@ NAME = ""
 HOTKEY = ""
 
 # =========== [ Window Position ] ===========
-# Left margin percentage of the modal window
-MODAL_LEFT_PERCENT = 5
+# Width percentage of the panel
+PANEL_WIDTH_PERCENT = 80
 
-# Width percentage of the modal window
-MODAL_WIDTH_PERCENT = 90
-
-# Height percentage of the modal window
-MODAL_HEIGHT_PERCENT = 70
+# Height percentage of the panel
+PANEL_HEIGHT_PERCENT = 70
 
 # =========== [ Resource Recognition Match ] ===========
 # Grammar syntax identifiers applied when scanning for mounted resources
-#   markdown: Standard markdown syntax `![alt](uri)`
+#   markdown: Standard Markdown syntax `![alt](uri)`
 #   html    : Standard `<IMG>` tag syntax
 RESOURCE_GRAMMARS = ["markdown", "html"]
 
@@ -2477,18 +2556,31 @@ selenium = { headless = true }
 #   loginUrl: Target Login URL
 #   username: Account Username
 #   password: Account Password
-wordpress = { enabled = true, hostname = "https://blog.bugdesigner.cn", loginUrl = "https://blog.bugdesigner.cn/superman/", username = "demo", password = "demo1" }
+wordpress = {
+  enabled = true,
+  hostname = "https://blog.bugdesigner.cn",
+  loginUrl = "https://blog.bugdesigner.cn/superman/",
+  username = "demo",
+  password = "demo1",
+}
 
 # Authentication parameters for CNBlog integration
 #   enabled : Enabled
 #   username: Account Username
 #   password: Account Password
-cnblog = { enabled = true, username = "demo2", password = "demo2" }
+cnblog = {
+  enabled = true,
+  username = "demo2",
+  password = "demo2",
+}
 
 # Authentication parameters for CSDN integration
 #   enabled: Enabled
 #   cookie : Authentication Cookie string (Requires manual browser extraction; monitor for expiry)
-csdn = { enabled = true, cookie = "log_Id_pv=27; log_Id_view=857; dc_tos=se1n4s; log_Id_click=37......" }
+csdn = {
+  enabled = true,
+  cookie = "log_Id_pv=27; log_Id_view=857; dc_tos=se1n4s; log_Id_click=37......",
+}
 
 
 [ripgrep]
@@ -2519,19 +2611,131 @@ HOTKEY_GO_BACK = "alt+ArrowLeft"
 MAX_HISTORY_ENTRIES = 100
 
 
-[json_rpc]
+[assets_storage]
+# =========== [ Basic ] ===========
+ENABLE = false
+NAME = ""
+
+
+[diagram_enhance]
+# =========== [ Basic ] ===========
+ENABLE = false
+NAME = ""
+
+# =========== [ Zoom ] ===========
+# Zoom Step
+ZOOM_STEP = 0.1
+
+# Minimum Scale
+MIN_SCALE = 0.1
+
+# Maximum Scale
+MAX_SCALE = 5.0
+
+# Enable Wheel Zoom by Default
+WHEEL_ZOOM_DEFAULT = true
+
+# Double-click Diagram to Edit
+DOUBLE_CLICK_TO_EDIT = true
+
+# =========== [ Interaction ] ===========
+# Show Fullscreen Button
+SHOW_FULLSCREEN = true
+
+# Enable Drag Panning
+ENABLE_PAN = true
+
+# Enable Touch Gestures
+ENABLE_TOUCH = true
+
+# Allow Container Resizing
+RESIZABLE = true
+
+# =========== [ Container ] ===========
+# Minimum Container Width
+MIN_CONTAINER_WIDTH = 180
+
+# Minimum Container Height
+MIN_CONTAINER_HEIGHT = 120
+
+
+[html_editor]
+# =========== [ Basic ] ===========
+ENABLE = false
+NAME = ""
+HOTKEY = ""
+
+# =========== [ Editor ] ===========
+# Show HTML Files in File Tree
+SHOW_IN_FILE_TREE = true
+
+# Default View
+#   source : Source
+#   preview: Preview
+#   split  : Split
+DEFAULT_VIEW = "preview"
+
+# Refresh Preview While Editing
+AUTO_PREVIEW = true
+
+# Preview Refresh Delay (ms)
+PREVIEW_DELAY = 300
+
+# Editor Font Size (px)
+EDITOR_FONT_SIZE = 14
+
+# Synchronize Split View Scrolling
+SPLIT_SYNC = true
+
+# =========== [ Preview Security ] ===========
+# Allow Scripts in Preview (Risky)
+PREVIEW_ALLOW_SCRIPTS = false
+
+# Allow Network Resources in Preview
+PREVIEW_ALLOW_NETWORK = false
+
+
+[repository]
+# =========== [ Basic ] ===========
+ENABLE = false
+NAME = ""
+HOTKEY = ""
+
+
+[remote_control]
 # =========== [ Basic ] ===========
 # Warning: Activating this grants remote execution permissions over this machine. Proceed with extreme caution
 ENABLE = false
 NAME = ""
 
 # =========== [ Server ] ===========
-# RPC Server config
-#   port  : Listener Port
-#   host  : Bind Host
-#   path  : Route Path
-#   strict: Strict Mode
-SERVER_OPTIONS = { port = 5080, host = "127.0.0.1", path = "/", strict = false }
+# RPC Server Port
+SERVER_PORT = 5080
+
+# =========== [ Security ] ===========
+# Auth Token
+AUTH_TOKEN = "secret-token"
+
+# Warning: Enabling this allows remote execution of arbitrary JavaScript code, posing serious security risks
+ENABLE_EVAL = false
+
+# Allow modifying plugin configuration via RPC
+ALLOW_CONFIG_ACCESS = false
+
+# Configure whitelist of plugin methods allowed for remote invocation
+ALLOWED_METHODS = {
+  window_tab = ["showInFinder", "closeTab"],
+  search_multi = ["call"],
+  read_only = ["call"],
+}
+
+# =========== [ Rate Limit ] ===========
+# requestsPerMinute: Maximum requests per minute per client
+# burstSize        : Allowed instantaneous burst requests
+RATE_LIMIT = {
+  requestsPerMinute = 60,
+  burstSize = 10,
+}
 
 
 [updater]
@@ -2643,7 +2847,15 @@ INTERACTIVE_MODE = true
 #   allowMarkdown   : Support Markdown Syntax
 #   senderNickname  : Default nickname for the sender (Right side)
 #   timeNickname    : Keyword nickname specifically used to declare timestamps
-DEFAULT_OPTIONS = { useStrict = true, showNickname = true, showAvatar = true, notAllowShowTime = false, allowMarkdown = true, senderNickname = "me", timeNickname = "time" }
+DEFAULT_OPTIONS = {
+  useStrict = true,
+  showNickname = true,
+  showAvatar = true,
+  notAllowShowTime = false,
+  allowMarkdown = true,
+  senderNickname = "me",
+  timeNickname = "time",
+}
 
 # =========== [ Template ] ===========
 # Template: Default sample padding content when inserting a code block
@@ -2760,6 +2972,9 @@ RENDERER = "svg"
 #   svg: (Requires SVG renderer)
 EXPORT_TYPE = "svg"
 
+# Use Dirty Rect (Requires Canvas renderer)
+USE_DIRTY_RECT = false
+
 # =========== [ Chart Default Params ] ===========
 # Theme (light / dark)
 THEME = "light"
@@ -2771,15 +2986,24 @@ LOCALE = "en"
 DEFAULT_FENCE_HEIGHT = "300px"
 
 # Default Fence Background Color
-DEFAULT_FENCE_BACKGROUND_COLOR = "#F8F8F8"
+DEFAULT_FENCE_BACKGROUND_COLOR = "transparent"
+
+# Decal Pattern
+DECAL_PATTERN = false
+
+# Auto Resize
+AUTO_RESIZE = false
 
 # =========== [ Template ] ===========
 # Template: Default sample padding content when inserting a code block
 TEMPLATE = """
 // ==BlockCodeConfig==
+// @renderer         svg
+// @useDirtyRect     false
 // @locale           en
 // @theme            light
-// @renderer         svg
+// @decal            false
+// @resize           false
 // @width            auto
 // @height           300px
 // @backgroundColor  transparent
@@ -2794,24 +3018,24 @@ TEMPLATE = """
 // NOTE:     Code within this block will be evaluated. Exercise caution
 
 option = {
-    tooltip: { trigger: 'item' },
-    legend: { top: '5%', left: 'center' },
-    series: [{
-        name: 'Access From',
-        type: 'pie',
-        radius: ['40%', '70%'],
-        avoidLabelOverlap: false,
-        label: { show: false, position: 'center' },
-        emphasis: { label: { show: true,  fontSize: 40,  fontWeight: 'bold' } },
-        labelLine: { show: false },
-        data: [
-            {value: 1548, name: 'Search Engine'},
-            {value: 735, name: 'Direct'},
-            {value: 580, name: 'Email'},
-            {value: 484, name: 'Union Ads'},
-            {value: 310, name: 'Video Ads'},
-        ],
-    }]
+  tooltip: { trigger: "item" },
+  legend: { top: "5%", left: "center" },
+  series: [{
+    name: "Access From",
+    type: "pie",
+    radius: ["40%", "70%"],
+    avoidLabelOverlap: false,
+    label: { show: false, position: "center" },
+    emphasis: { label: { show: true, fontSize: 40, fontWeight: "bold" } },
+    labelLine: { show: false },
+    data: [
+      { value: 1548, name: "Search Engine" },
+      { value: 735, name: "Direct" },
+      { value: 580, name: "Email" },
+      { value: 484, name: "Union Ads" },
+      { value: 310, name: "Video Ads" },
+    ],
+  }],
 }"""
 
 
@@ -2836,7 +3060,7 @@ CHART_ALIGN = "center"
 DEFAULT_FENCE_HEIGHT = "300px"
 
 # Default Fence Background Color
-DEFAULT_FENCE_BACKGROUND_COLOR = "#F8F8F8"
+DEFAULT_FENCE_BACKGROUND_COLOR = "transparent"
 
 # =========== [ Template ] ===========
 # Template: Default sample padding content when inserting a code block
@@ -2849,9 +3073,9 @@ TEMPLATE = """
 // ==/BlockCodeConfig==
 
 // Built-in variables:
-//   1. Chart:   chart Class
-//   2. config:  chart option object
-//   3. this:    chart plugin instance
+//   1. Chart:  chart Class
+//   2. config: chart option object
+//   3. this:   chart plugin instance
 // API:  https://chart.nodejs.cn/docs/latest/configuration/
 // NOTE: Code within this block will be evaluated. Exercise caution
 
@@ -2900,11 +3124,11 @@ CHART_ALIGN = "center"
 DEFAULT_FENCE_HEIGHT = "auto"
 
 # Default Fence Background Color
-DEFAULT_FENCE_BACKGROUND_COLOR = "#FFFFFF"
+DEFAULT_FENCE_BACKGROUND_COLOR = "transparent"
 
 # Skin Files
-# Download Skin Files: https://cdnjs.com/libraries/wavedrom
-SKIN_FILES = ["plugin/wavedrom/narrow.js"]
+# Download Skin Files: https://github.com/wavedrom/wavedrom/tree/trunk/skins
+SKIN_FOLDER = "plugin/wavedrom/skins"
 
 # =========== [ Template ] ===========
 # Template: Default sample padding content when inserting a code block
@@ -2914,24 +3138,25 @@ TEMPLATE = """
 // @width            auto
 // @height           auto
 // @backgroundColor  transparent
+// @hscale           1
+// @skin             default
 // ==/BlockCodeConfig==
 
 // Tutorial: https://wavedrom.com/tutorial.html
 // NOTE:     Code within this block will be evaluated. Exercise caution
 {
-    signal: [
-        { name: "pclk", wave: 'p.......' },
-        { name: "Pclk", wave: 'P.......' },
-        { name: "nclk", wave: 'n.......' },
-        { name: "Nclk", wave: 'N.......' },
-        { name: 'clk0', wave: 'phnlPHNL' },
-        {},
-        { name: 'clk1', wave: 'xhlhLHl.' },
-        { name: 'clk2', wave: 'hpHplnLn' },
-        { name: 'clk3', wave: 'nhNhplPl' },
-        { name: 'clk4', wave: 'xlh.L.Hx' },
-    ],
-    config : { 'hscale' : 1.4 }
+  signal: [
+    { name: "pclk", wave: "p......." },
+    { name: "Pclk", wave: "P......." },
+    { name: "nclk", wave: "n......." },
+    { name: "Nclk", wave: "N......." },
+    { name: "clk0", wave: "phnlPHNL" },
+    {},
+    { name: "clk1", wave: "xhlhLHl." },
+    { name: "clk2", wave: "hpHplnLn" },
+    { name: "clk3", wave: "nhNhplPl" },
+    { name: "clk4", wave: "xlh.L.Hx" },
+  ]
 }"""
 
 
@@ -2953,7 +3178,7 @@ INTERACTIVE_MODE = true
 DEFAULT_FENCE_HEIGHT = "800px"
 
 # Default Fence Background Color
-DEFAULT_FENCE_BACKGROUND_COLOR = "#F8F8F8"
+DEFAULT_FENCE_BACKGROUND_COLOR = "transparent"
 
 # =========== [ Template ] ===========
 # Template: Default sample padding content when inserting a code block
@@ -2977,10 +3202,10 @@ const today = new Date()
 const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000)
 const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1)
 
-option = {defaultView: 'week'}
+option = { defaultView: "week" }
 calendar.createEvents([
-    {id: 'event1', calendarId: 'cal2', title: 'meeting', start: yesterday, end: today},
-    {id: 'event2', calendarId: 'cal1', title: 'appointment', start: yesterday, end: nextMonth},
+  { id: "event1", calendarId: "cal2", title: "meeting", start: yesterday, end: today },
+  { id: "event2", calendarId: "cal1", title: "appointment", start: yesterday, end: nextMonth },
 ])"""
 
 
@@ -2998,22 +3223,33 @@ LANGUAGE = "abc"
 INTERACTIVE_MODE = true
 
 # =========== [ Rendering Control ] ===========
-# Visual options for the music sheet, reference: https://paulrosen.github.io/abcjs/visual/render-abc-options.html
-# Common Configurations:
-#   scale     : Zoom scale
-#   staffwidth: Staff width
-#   responsive: Responsive resizing behavior
-VISUAL_OPTIONS = { scale = 1.0, staffwidth = 400, responsive = "resize" }
+# Render options for the music sheet, reference: https://docs.abcjs.net/visual/render-abc-options.html
+RENDER_OPTIONS = {
+  scale = 1.0,
+  staffwidth = 400,
+  responsive = "resize",
+  selectionColor = "#ff0000",
+}
 
 # Default Fence Height, if 'auto' it adapts to the content
 DEFAULT_FENCE_HEIGHT = "auto"
 
 # Default Fence Background Color
-DEFAULT_FENCE_BACKGROUND_COLOR = "#F8F8F8"
+DEFAULT_FENCE_BACKGROUND_COLOR = "transparent"
 
 # =========== [ Template ] ===========
 # Template: Default sample padding content when inserting a code block
 TEMPLATE = """
+// ==BlockCodeConfig==
+// @scale            1.0
+// @staffwidth       400
+// @responsive       resize
+// @selectionColor   #FF0000
+// @width            auto
+// @height           auto
+// @backgroundColor  transparent
+// ==/BlockCodeConfig==
+
 X:1
 T:Twinkle, Twinkle, Little Star
 M:4/4
@@ -3077,8 +3313,8 @@ TEMPLATE = """
 //   See: https://github.com/jgraph/drawio/blob/f7158bfb/src/main/webapp/js/diagramly/GraphViewer.js#L118
 
 graphConfig = {
-    source: "https://cdn.jsdelivr.net/gh/obgnail/typora_images@master/image/example.drawio",
-    page: 0,
+  source: "https://cdn.jsdelivr.net/gh/obgnail/typora_images@master/image/example.drawio",
+  page: 0,
 }"""
 
 
@@ -3089,13 +3325,16 @@ NAME = ""
 HOTKEY = ""
 
 # =========== [ Rendering Service ] ===========
-# Rendering Server URL. Recommended to install via Docker and enable the service:
-#   docker pull plantuml/plantuml-server:jetty
+# Rendering Server URL
+# Recommended to install via Docker and enable the service:
 #   docker run -d --name plantuml-server -p 8080:8080 plantuml/plantuml-server:jetty
-SERVER_URL = "http://localhost:8080"
+# You can also choose online rendering services, such as:
+#   https://kroki.io/plantuml
+#   https://www.plantuml.com/plantuml
+SERVER_URL = "https://kroki.io/plantuml"
 
 # Output Format: Generated image format returned
-#  svg: recommended for best distortion control
+#  svg: recommended
 #  png
 #  txt
 OUTPUT_FORMAT = "svg"
@@ -3195,7 +3434,7 @@ HOVER_TO_SHOW_FOLD_CALLOUT = true
 # Refer to specific icon values:
 #   Old Typora version: {your_typora_path}/resources/app/style/font-awesome-4.1.0/css/font-awesome.css
 #   New Typora version: {your_typora_path}/resources/style/font-awesome-4.1.0/css/font-awesome.css
-#   Network download: https://www.adfwebmagazine.jp/wp-content/uploads/test_v4.1.pdf
+#   Network download  : https://www.adfwebmagazine.jp/wp-content/uploads/test_v4.1.pdf
 FONT_FAMILY = "FontAwesome"
 
 # Use Network Icon When Exporting: Typora local PDF exports easily lose built-in fonts resulting in square placeholders. Enable this to auto-download CDN fonts to render the output
@@ -3240,3 +3479,19 @@ TEMPLATE = "> [!NOTE]\n> Support Type: TIP、BUG、INFO、NOTE、QUOTE、EXAMPLE
 # Developers only. Do NOT enable
 ENABLE = false
 NAME = ""
+
+# =========== [ Functions ] ===========
+# Singleton
+SINGLETON = true
+
+# Auto open DevTools
+AUTO_OPEN_DEVTOOLS = true
+
+# Expose CommonJS Variables
+EXPOSE_CJS_VARIABLES = true
+
+# Expose Plugin Variables
+EXPOSE_PLUGIN_VARIABLES = true
+
+# Run custom script
+RUN_CUSTOM_SCRIPT = true

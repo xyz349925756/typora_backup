@@ -15,7 +15,11 @@ Write-Host ""
 
 try {
     $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
-    $rootDir = (Resolve-Path (Join-Path $scriptDir "..\..")).Path
+    $expectedParent = Join-Path $scriptDir "..\.."
+    if (-not (Test-Path -LiteralPath $expectedParent)) {
+        throw "Execution context error. Please manually move the 'plugin' folder to Typora's installation directory before running this script."
+    }
+    $rootDir = [System.IO.Path]::GetFullPath($expectedParent)
     $paths = [PSCustomObject]@{
         RootDir       = $rootDir
         AppDir        = Join-Path -Path $rootDir -ChildPath "app"
@@ -25,26 +29,26 @@ try {
     }
 
     Write-Host "[1/5] Validating paths" -ForegroundColor Yellow
-    Write-Host "      -> Assuming Typora root is at '$($paths.RootDir)'."
-    if (!(Test-Path $paths.WindowHtml)) {
-        throw "Could not find 'window.html' at the expected location: '$($paths.WindowHtml)'."
+    Write-Host ("      -> Assuming Typora root is at '{0}'." -f $paths.RootDir)
+    if (!(Test-Path -LiteralPath $paths.WindowHtml)) {
+        throw ("Could not find 'window.html' at the expected location: '{0}'. Please verify that you are running this script in the correct Typora installation path." -f $paths.WindowHtml)
     }
 
     Write-Host "[2/5] Checking Typora version" -ForegroundColor Yellow
     $frameScript = ""
-    if (Test-Path -Path $paths.AppSrcDir) {
+    if (Test-Path -LiteralPath $paths.AppSrcDir) {
         $frameScript = '<script src="./appsrc/window/frame.js" defer="defer"></script>'
         Write-Host "      -> 'appsrc' folder found. Using new version."
-    } elseif (Test-Path -Path $paths.AppDir) {
+    } elseif (Test-Path -LiteralPath $paths.AppDir) {
         $frameScript = '<script src="./app/window/frame.js" defer="defer"></script>'
         Write-Host "      -> 'app' folder found. Using old version."
     } else {
-        throw "Neither 'app' nor 'appsrc' directory could be found in '$($paths.RootDir)'."
+        throw ("Neither 'app' nor 'appsrc' directory could be found in '{0}'. Please verify that you are running this script in the correct Typora installation path." -f $paths.RootDir)
     }
 
     Write-Host "[3/5] Reading and validating 'window.html'" -ForegroundColor Yellow
     $pluginScript = '<script src="./plugin/index.js" defer="defer"></script>'
-    $fileContent = Get-Content -Path $paths.WindowHtml -Encoding UTF8 -Raw
+    $fileContent = Get-Content -LiteralPath $paths.WindowHtml -Encoding UTF8 -Raw
     if (!($fileContent -match [Regex]::Escape($frameScript))) {
         throw "'window.html' seems to be modified or corrupted. The expected frame script was not found."
     }
@@ -57,13 +61,15 @@ try {
 
     Write-Host "[4/5] Removing plugin script from 'window.html'" -ForegroundColor Yellow
     $newFileContent = $fileContent -replace [Regex]::Escape($pluginScript), ''
-    $newFileContent = $newFileContent -replace '(?m)^\s*$', ''
-    Set-Content -Path $paths.WindowHtml -Value $newFileContent -Encoding UTF8 -NoNewline
+
+    $utf8NoBom = New-Object System.Text.UTF8Encoding $false
+    [System.IO.File]::WriteAllText($paths.WindowHtml, $newFileContent, $utf8NoBom)
+
     Write-Host "      -> File updated successfully."
 
-    Write-Host "[5/5] Removing backup file '$($paths.WindowHtmlBak)'" -ForegroundColor Yellow
-    if (Test-Path $paths.WindowHtmlBak) {
-        Remove-Item -Path $paths.WindowHtmlBak -Force
+    Write-Host ("[5/5] Removing backup file '{0}'" -f $paths.WindowHtmlBak) -ForegroundColor Yellow
+    if (Test-Path -LiteralPath $paths.WindowHtmlBak) {
+        Remove-Item -LiteralPath $paths.WindowHtmlBak -Force
         Write-Host "      -> Backup file removed."
     } else {
         Write-Host "      -> No backup file found to remove."
@@ -76,5 +82,5 @@ try {
     Write-Host "`nUninstallation failed. Please check the error message above." -ForegroundColor Red
 } finally {
     Write-Host "`nPress any key to exit..."
-    $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") | Out-Null
+    try { $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") | Out-Null } catch {}
 }

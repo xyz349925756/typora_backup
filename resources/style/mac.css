@@ -190,3 +190,15 @@
   padding-bottom: 0;
   margin-bottom: -50px;
 }*/
+
+li > .md-fences:first {
+  position: static;
+}
+
+/* Fix li desc gone for codeblocks */
+li>.mathjax-block:first-child::before,
+li>pre:first-child::before {
+  content: " ";
+  display: block;
+  height: 0;
+}

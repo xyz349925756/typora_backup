@@ -1,75 +1,27 @@
 class ServiceContainer {
-    services = new Map()
-    plugins = {}
-    settings = {}
-    utils = null
+  plugins = {}
+  settings = {}
 
-    registerService(name, instance) {
-        this.services.set(name, instance)
-    }
+  setPlugins = (plugins) => this.plugins = plugins
+  setSettings = (settings) => {
+    // "global" is a general setting, not a specific plugin setting
+    Object.defineProperty(settings, "global", { enumerable: false })
+    this.settings = settings
+  }
 
-    getService(name) {
-        return this.services.get(name)
-    }
+  connect = (utils, settings) => {
+    utils.setContainer(this)
+    this.setSettings(settings)
+  }
 
-    setPlugins(plugins) {
-        this.plugins = plugins
-    }
+  getAllPlugins = () => this.plugins
+  getPlugin = (name) => this.plugins[name]
 
-    setSettings(settings) {
-        // "global" is a general setting, not a specific plugin setting
-        Object.defineProperty(settings, "global", { enumerable: false })
-        this.settings = settings
-    }
-
-    setUtils(utils) {
-        this.utils = utils
-        utils.registerContainer(this)
-    }
-
-    getAllBasePlugins() {
-        return this.plugins
-    }
-
-    getBasePlugin(fixedName) {
-        return this.plugins[fixedName]
-    }
-
-    getAllCustomPlugins() {
-        return this.plugins.custom?.plugins
-    }
-
-    getCustomPlugin(fixedName) {
-        return this.plugins.custom?.plugins[fixedName]
-    }
-
-    getAllBasePluginSettings() {
-        return this.settings
-    }
-
-    getAllCustomPluginSettings() {
-        return this.plugins.custom?.settings
-    }
-
-    getGlobalSetting() {
-        return this.settings.global
-    }
-
-    getBasePluginSetting(fixedName) {
-        return this.settings[fixedName]
-    }
-
-    getCustomPluginSetting(fixedName) {
-        return this.plugins.custom?.settings[fixedName]
-    }
-
-    tryGetPlugin(fixedName) {
-        return this.plugins[fixedName] || this.plugins.custom?.plugins[fixedName]
-    }
-
-    tryGetPluginSetting(fixedName) {
-        return this.settings[fixedName] || this.plugins.custom?.settings[fixedName]
-    }
+  getAllSettings = () => this.settings
+  getSetting = (name, key) => {
+    const setting = this.settings[name]
+    return key === undefined ? setting : setting?.[key]
+  }
 }
 
 module.exports = new ServiceContainer()

@@ -1,268 +1,374 @@
+const FileContext = require("./file_context")
 const Searcher = require("./searcher")
 const Highlighter = require("./highlighter")
+const { ExplainPresenter, GrammarPresenter } = require("./presenters")
 
-class SearchMultiPlugin extends BasePlugin {
-    cancelController = null
-    searcher = new Searcher(this)
-    highlighter = new Highlighter(this)
-    allowedExtensions = new Set(this.config.ALLOW_EXT.map(ext => {
-        const prefix = (ext !== "" && !ext.startsWith(".")) ? "." : ""
-        return prefix + ext.toLowerCase()
+const h = (tag, attrs = {}, ...children) => {
+  const el = document.createElement(tag)
+  for (const [key, val] of Object.entries(attrs)) {
+    if (key.startsWith("data-")) {
+      el.dataset[key.slice(5)] = val
+    } else {
+      el[key] = val
+    }
+  }
+  if (children.length) {
+    el.append(...children)
+  }
+  return el
+}
+
+class SearchExecutor {
+  constructor({ config, utils, searcher }) {
+    this.config = config
+    this.utils = utils
+    this.searcher = searcher
+    this.taskRunner = this.utils.getSingleTaskRunner()
+    this.allowedExtensions = new Set(this.config.ALLOW_EXT.map(ext => {
+      const prefix = (ext !== "" && !ext.startsWith(".")) ? "." : ""
+      return prefix + ext.toLowerCase()
     }))
+  }
 
-    styleTemplate = () => {
-        const colors_style = this.config.HIGHLIGHT_COLORS
-            .map((color, idx) => `.cm-plugin-highlight-hit-${idx} { background-color: ${color} !important; }`)
-            .join("\n")
-        return { colors_style }
+  abort = () => this.taskRunner.abort()
+
+  execute = async (ast, rootPath, handlers) => {
+    const { onEmpty, onStart, onItem, onSuccess, onError } = handlers
+    const { MAX_SIZE, MAX_DEPTH, MAX_ENTITIES, TIMEOUT, TRAVERSE_STRATEGY, CONCURRENCY_LIMIT, IGNORE_FOLDERS, FOLLOW_SYMBOLIC_LINKS } = this.config
+
+    this.abort()
+    if (!ast) {
+      onEmpty?.()
+      return
     }
 
-    html = () => `
-        <fast-window
-            id="plugin-search-multi"
-            window-title="${this.pluginName}"
-            window-resize="none"
-            window-buttons="showGrammar|fa-question|${this.i18n.t("grammar")};close|fa-times"
-            hidden>
-            <div class="plugin-search-multi-wrap">
-                <form id="plugin-search-multi-form">
-                    <input type="text">
-                    <div class="plugin-search-multi-btn ${(this.config.CASE_SENSITIVE) ? "select" : ""}">
-                        <svg class="icon"><use xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="#find-and-replace-icon-case"></use></svg>
-                    </div>
-                </form>
-                <div class="plugin-search-multi-result plugin-common-hidden">
-                    <div class="plugin-search-counter">${this.i18n.t("matchedFiles")}：<span>0</span></div>
-                    <div class="plugin-search-files"></div>
-                    <div class="plugin-search-highlights"></div>
-                </div>
-                <div class="plugin-search-multi-searching plugin-common-hidden">
-                    <div>${this.i18n.t("searching")}</div>
-                    <div class="typora-search-spinner"><div class="rect1"></div><div class="rect2"></div><div class="rect3"></div><div class="rect4"></div><div class="rect5"></div></div>
-                </div>
-            </div>
-        </fast-window>
-    `
+    await this.taskRunner.run(async signal => {
+      try {
+        onStart?.()
 
-    hotkey = () => [{ hotkey: this.config.HOTKEY, callback: this.call }]
-
-    init = () => {
-        this.entities = {
-            window: document.querySelector("#plugin-search-multi"),
-            form: document.querySelector("#plugin-search-multi-form"),
-            input: document.querySelector("#plugin-search-multi-form input"),
-            btn: document.querySelector(".plugin-search-multi-btn"),
-            result: document.querySelector(".plugin-search-multi-result"),
-            counter: document.querySelector(".plugin-search-counter span"),
-            files: document.querySelector(".plugin-search-files"),
-            highlights: document.querySelector(".plugin-search-highlights"),
-            searching: document.querySelector(".plugin-search-multi-searching"),
-        }
-    }
-
-    process = () => {
-        this.searcher.process()
-        this.highlighter.process()
-        this.entities.files.addEventListener("click", ev => {
-            const path = ev.target.closest(".plugin-search-item")?.dataset.path
-            if (path) this.utils.openFile(path)
-        })
-        this.entities.btn.addEventListener("click", () => {
-            this.entities.btn.classList.toggle("select")
-            this.config.CASE_SENSITIVE = !this.config.CASE_SENSITIVE
-        })
-        this.entities.window.addEventListener("btn-click", ev => {
-            if (ev.detail.action === "showGrammar") {
-                this.searcher.showGrammar()
-            } else if (ev.detail.action === "close") {
-                this.hide()
-            }
-        })
-        this.entities.form.addEventListener("submit", ev => {
-            ev.preventDefault()
-            this.run()
-        })
-        this.entities.input.addEventListener("keydown", ev => {
-            if (ev.key === "ArrowUp" || ev.key === "ArrowDown") {
-                ev.preventDefault()
-                this.utils.scrollActiveItem(this.entities.files, ".plugin-search-item.active", ev.key === "ArrowDown")
-            } else if (ev.key === "Escape" || ev.key === "Backspace" && this.config.BACKSPACE_TO_HIDE && !this.entities.input.value) {
-                this.hide()
-            }
-        })
-    }
-
-    run = async (rootPath = this.utils.getMountFolder(), input = this.entities.input.value) => {
-        const ast = this.getAST(input)
-        if (ast) {
-            await this.searchByAST(rootPath, ast)
-            this.highlightByAST(ast)
-        }
-    }
-
-    getAST = (input = this.entities.input.value, optimize = this.config.OPTIMIZE_SEARCH) => {
-        input = input.trim()
-        if (!input) return
-
-        try {
-            const ast = this.searcher.parse(input, optimize)
-            const explain = this.searcher.toExplain(ast)
-            this.entities.input.setAttribute("title", explain)
-            return ast
-        } catch (e) {
-            this.entities.input.removeAttribute("title")
-            this.utils.notification.show(e.toString().slice(7), "error", 5000)
-            console.error(e)
-        }
-    }
-
-    highlightByAST = ast => {
-        this.entities.highlights.innerHTML = ""
-        try {
-            ast = ast || this.getAST()
-            this.utils.hide(this.entities.highlights)
-            if (!ast) return
-            const tokens = this.searcher.getPositiveContentTokens(ast)
-            if (tokens.length === 0) return
-
-            const hint = this.i18n.t("highlightHint")
-            const hitGroups = this.highlighter.doSearch(tokens)
-            const items = Object.entries(hitGroups).map(([cls, { name, hits }]) => {
-                const item = document.createElement("div")
-                item.className = `plugin-highlight-item ${cls}`
-                item.dataset.pos = -1
-                if (!this.config.HIDE_BUTTON_HINT) {
-                    item.setAttribute("ty-hint", hint)
-                }
-                item.appendChild(document.createTextNode(`${name} (${hits.length})`))
-                return item
-            })
-            this.entities.highlights.append(...items)
-            this.utils.show(this.entities.highlights)
-        } catch (e) {
-            this.utils.notification.show(e.toString(), "error")
-            console.error(e)
-        }
-    }
-
-    searchByAST = async (rootPath, ast) => {
-        this.utils.hide(this.entities.result)
-        this.utils.show(this.entities.searching)
-        this.entities.counter.textContent = 0
-        this.entities.files.innerHTML = ""
-
-        const { MAX_SIZE, MAX_DEPTH, MAX_ENTITIES, TIMEOUT, TRAVERSE_STRATEGY, CONCURRENCY_LIMIT, IGNORE_FOLDERS, FOLLOW_SYMBOLIC_LINKS, STOP_SEARCHING_ON_HIDING } = this.config
         const { extname } = this.utils.Package.Path
+        const verifyExt = name => this.allowedExtensions.has(extname(name).toLowerCase())
 
-        const getFileFilter = () => {
-            const verifyExt = name => this.allowedExtensions.has(extname(name).toLowerCase())
-            return 0 > MAX_SIZE
-                ? (name) => verifyExt(name)
-                : (name, path, stat) => stat.size < MAX_SIZE && verifyExt(name)
-        }
-        const getDirFilter = () => name => !IGNORE_FOLDERS.includes(name)
-        const getFileParamsCreator = () => this.searcher.getParamProvider(ast)
-        const getOnFile = () => {
-            const matcher = this.searcher.match.bind(null, ast)
-            return this._showSearchResult(rootPath, matcher)
-        }
-        const getSignal = () => {
-            const signals = []
-            if (TIMEOUT > 0) {
-                signals.push(AbortSignal.timeout(TIMEOUT))
-            }
-            if (STOP_SEARCHING_ON_HIDING) {
-                this.cancelController = new AbortController()
-                signals.push(this.cancelController.signal)
-            }
-            if (signals.length === 0) return undefined
-            return signals.length === 1 ? signals[0] : AbortSignal.any(signals)
-        }
-        const onFinished = (err) => {
-            this.cancelController = null
-            this.utils.hide(this.entities.searching)
-
-            if (!err) return
-            if (err.name === "AbortError") return  // user cancellation
-            console.error(err)
-            const msg = err.name === "TimeoutError" ? this.i18n.t("error.timeout") : err.toString()
-            this.utils.notification.show(msg, "error")
-        }
-
-        await this.utils.walkDir({
+        const matcher = this.searcher.compile(this.searcher.optimize(ast))
+        await new Promise((resolve, reject) => {
+          this.utils.walkDir({
             dir: rootPath,
-            fileFilter: getFileFilter(),
-            dirFilter: getDirFilter(),
-            fileParamsGetter: getFileParamsCreator(),
-            onFile: getOnFile(),
-            signal: getSignal(),
+            fileFilter: 0 > MAX_SIZE ? verifyExt : (name, path, stat) => stat.size < MAX_SIZE && verifyExt(name),
+            dirFilter: name => !IGNORE_FOLDERS.includes(name),
+            fileParamsGetter: (path, file, dir, stats) => new FileContext(path, file, dir, stats),
+            onFile: async fileCtx => (await matcher(fileCtx)) && onItem?.(fileCtx, signal),
+            signal: TIMEOUT > 0 ? AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT)]) : signal,
             semaphore: CONCURRENCY_LIMIT,
             maxEntities: MAX_ENTITIES,
             maxDepth: MAX_DEPTH,
             strategy: TRAVERSE_STRATEGY,
             followSymlinks: FOLLOW_SYMBOLIC_LINKS,
-            onFinished,
+            onFinished: err => err && err.name !== "AbortError" ? reject(err) : resolve(),
+          }).catch(reject)
         })
+        if (!signal.aborted) onSuccess?.()
+      } catch (err) {
+        if (!signal.aborted && err.name !== "AbortError") onError?.(err)
+      }
+    })
+  }
+}
+
+class SearchStateMachine {
+  state = "idle"
+  transitions = {
+    idle: ["searching"],
+    searching: ["done", "error", "abort"],
+    done: ["idle", "searching"],
+    error: ["idle", "searching"],
+    abort: ["idle", "searching"],
+  }
+
+  constructor(hooks = {}) {
+    this.hooks = hooks
+  }
+
+  dispatch = (nextState) => {
+    if (this.state === nextState) return false
+    if (!this.transitions[this.state].includes(nextState)) return false
+
+    const prevState = this.state
+    this.state = nextState
+    this.hooks.onStateChange?.(nextState, prevState)
+    const hookName = `onEnter${nextState.charAt(0).toUpperCase() + nextState.slice(1)}`
+    this.hooks[hookName]?.(prevState)
+    return true
+  }
+
+  start = () => this.dispatch("searching")
+  success = () => this.dispatch("done")
+  fail = () => this.dispatch("error")
+  cancel = () => this.dispatch("abort")
+  reset = () => this.dispatch("idle")
+
+  isSearching = () => this.state === "searching"
+}
+
+class SearchMultiPlugin extends BasePlugin {
+  ctx = { config: this.config, utils: this.utils, i18n: this.i18n }
+  searcher = new Searcher(this.ctx)
+  highlighter = new Highlighter(this.ctx)
+  executor = new SearchExecutor({ ...this.ctx, searcher: this.searcher })
+  explainPresenter = new ExplainPresenter({ ...this.ctx, searcher: this.searcher })
+  grammarPresenter = new GrammarPresenter({ ...this.ctx, searcher: this.searcher })
+
+  style = () => ({
+    counter_prefix_text: this.i18n.t("matchedFiles") + "：",
+    colors_style: this.config.HIGHLIGHT_COLORS
+      .map((color, idx) => `.cm-sm-hit-${idx} { background-color: ${color} !important; }`)
+      .join("\n"),
+  })
+
+  html = () =>
+    `<fast-window
+      id="plugin-search-multi"
+      hidden
+      window-title="${this.pluginName}"
+      window-resize="none"
+      window-buttons="showGrammar|fa-question|${this.i18n.t("grammar")};close|fa-times">
+      <div class="plugin-search-multi-header ${this.config.EXPLAIN_TRIGGER.map(t => `trigger-${t}`).join(" ")}">
+        <form id="plugin-search-multi-form">
+          <div class="plugin-search-multi-input-wrap">
+            <input type="text">
+            <div class="plugin-search-multi-modifiers">
+              <div class="plugin-search-multi-case${this.config.CASE_SENSITIVE ? " is-active" : ""}" ty-hint="${this.i18n.t("$label.CASE_SENSITIVE")}">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 18 6 6 12 18M3 14h7"/><circle cx="18" cy="14" r="4"/><path d="M22 10v8"/></svg>
+              </div>
+              <div class="plugin-search-multi-anchor${this.config.HIGHLIGHTS_MATCH_ANCHOR ? " is-active" : ""}" ty-hint="${this.i18n.t("$label.HIGHLIGHTS_MATCH_ANCHOR")}">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6H3v12h3"/><path d="M18 6h3v12h-3"/><path d="M9 10h6"/><path d="M9 14h4"/></svg>
+              </div>
+            </div>
+          </div>
+          <div class="plugin-search-multi-trigger">
+            <svg class="sm-icon-run" xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h16M14 6l6 6-6 6"/></svg>
+            <svg class="sm-icon-stop" xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2.5" ry="2.5"/></svg>
+          </div>
+        </form>
+        <div class="plugin-search-multi-explain"></div>
+      </div>
+      <div class="plugin-search-result is-idle">
+        <div class="plugin-search-counter"></div>
+        <div class="plugin-search-files"></div>
+        <div class="plugin-search-highlights"></div>
+      </div>
+    </fast-window>`
+
+  hotkey = () => [{ hotkey: this.config.HOTKEY, callback: this.call }]
+
+  init = () => {
+    this.entities = {
+      panel: document.querySelector("#plugin-search-multi"),
+      header: document.querySelector(".plugin-search-multi-header"),
+      form: document.querySelector("#plugin-search-multi-form"),
+      input: document.querySelector("#plugin-search-multi-form input"),
+      anchorBtn: document.querySelector(".plugin-search-multi-anchor"),
+      caseBtn: document.querySelector(".plugin-search-multi-case"),
+      triggerBtn: document.querySelector(".plugin-search-multi-trigger"),
+      explain: document.querySelector(".plugin-search-multi-explain"),
+      result: document.querySelector(".plugin-search-result"),
+      counter: document.querySelector(".plugin-search-counter"),
+      files: document.querySelector(".plugin-search-files"),
+      highlights: document.querySelector(".plugin-search-highlights"),
     }
 
-    _showSearchResult = (rootPath, matcher) => {
-        const newItem = (rootPath, filePath, stats) => {
-            const { dir, base, name } = this.utils.Package.Path.parse(filePath)
-            const dirPath = this.config.RELATIVE_PATH ? dir.replace(rootPath, ".") : dir
+    const resetUI = (isSearching) => {
+      this.entities.counter.textContent = isSearching ? "0" : ""
+      this.entities.files.replaceChildren()
+      this.entities.highlights.replaceChildren()
+    }
+    this.fsm = new SearchStateMachine({
+      onStateChange: (newState, oldState) => {
+        this.entities.result.classList.remove(`is-${oldState}`)
+        this.entities.result.classList.add(`is-${newState}`)
+        this.entities.triggerBtn.classList.toggle("is-searching", newState === "searching")
+      },
+      onEnterIdle: () => resetUI(false),
+      onEnterSearching: () => resetUI(true),
+      onEnterAbort: () => this.utils.notification.show("Search Aborted", "warning"),
+    })
+  }
 
-            const item = document.createElement("div")
-            item.className = "plugin-search-item"
-            item.dataset.path = filePath
-            if (this.config.SHOW_MTIME) {
-                const time = stats.mtime.toLocaleString(undefined, { hour12: false })
-                item.setAttribute("ty-hint", time)
-            }
+  process = () => {
+    this.highlighter.process()
 
-            const itemTitle = document.createElement("div")
-            itemTitle.className = "plugin-search-item-title"
-            itemTitle.textContent = this.config.SHOW_EXT ? base : name
+    this.utils.eventHub.addEventListener(this.utils.eventHub.eventType.fileContentLoaded, () => this.resetHighlight())
+    this.utils.createSmartInputHandler(this.entities.input, () => this._updateExplain(true))
 
-            const itemPath = document.createElement("div")
-            itemPath.className = "plugin-search-item-path"
-            itemPath.textContent = dirPath + this.utils.separator
+    this.entities.files.addEventListener("click", ev => this.utils.openFile(ev.target.closest(".plugin-search-item")?.dataset.path))
+    this.entities.triggerBtn.addEventListener("click", () => {
+      if (this.fsm.isSearching()) {
+        this.executor.abort()
+        this.fsm.cancel()
+      } else {
+        this.search()
+      }
+    })
+    this.entities.anchorBtn.addEventListener("click", () => {
+      this.entities.anchorBtn.classList.toggle("is-active")
+      this.highlighter.options.matchAnchor = (this.config.HIGHLIGHTS_MATCH_ANCHOR = !this.config.HIGHLIGHTS_MATCH_ANCHOR)
+      if (!this.fsm.isSearching() && this.entities.input.value) {
+        this.highlightByAST()
+      }
+    })
+    this.entities.caseBtn.addEventListener("click", () => {
+      this.entities.caseBtn.classList.toggle("is-active")
+      const sensitive = this.config.CASE_SENSITIVE = !this.config.CASE_SENSITIVE
+      this.searcher.options.caseSensitive = sensitive
+      this.highlighter.options.caseSensitive = sensitive
+      this._updateExplain(true)
+    })
+    this.entities.panel.addEventListener("btn-click", ev => {
+      if (ev.detail.action === "showGrammar") {
+        this.grammarPresenter.show()
+      } else if (ev.detail.action === "close") {
+        this.hide()
+      }
+    })
+    this.entities.form.addEventListener("submit", ev => {
+      ev.preventDefault()
+      this.search()
+    })
+    this.entities.input.addEventListener("keydown", ev => {
+      if (ev.key === "Escape" || ev.key === "Backspace" && this.config.BACKSPACE_TO_HIDE && !this.entities.input.value) {
+        this.hide()
+      }
+    })
+  }
 
-            item.append(itemTitle, itemPath)
-            return item
-        }
+  search = async (rootPath = this.utils.getMountFolder(), input = this.entities.input.value) => {
+    if (this.fsm.isSearching()) this.fsm.cancel()
 
-        let index = 0
-        const showResult = this.utils.once(() => this.utils.show(this.entities.result))
-        return source => {
-            if (matcher(source)) {
-                index++
-                this.entities.files.appendChild(newItem(rootPath, source.path, source.stats))
-                this.entities.counter.textContent = index
-                showResult()
-            }
-        }
+    const ast = this._getAST(input)
+    this._updateExplain(!ast)
+
+    await this.executor.execute(ast, rootPath, {
+      onEmpty: () => this.fsm.reset(),
+      onStart: () => this.fsm.start(),
+      onItem: this._createResultAppender(rootPath),
+      onSuccess: () => this.fsm.success() && this.highlightByAST(ast),
+      onError: (err) => {
+        const msg = err.name === "TimeoutError" ? this.i18n.t("error.timeout") : err.toString()
+        this.utils.notification.show(msg, "error")
+        this.fsm.fail()
+        console.error(err)
+      },
+    })
+  }
+
+  highlightByAST = (ast = this._getAST()) => {
+    this.entities.highlights.replaceChildren()
+    if (!ast) return
+
+    try {
+      const conditions = this.searcher.extractHighlightConditions(ast)
+      const hitGroups = conditions.length === 0 ? null : this.highlighter.doSearch(conditions)
+      if (!hitGroups) return
+      const items = Object.entries(hitGroups).map(([cls, group]) =>
+        h("div", { className: `plugin-hl-item ${cls}`, "data-pos": -1 },
+          h("div", { className: "sm-hl-name", textContent: group.name }),
+          h("div", { className: "sm-hl-count", textContent: group.hits.length }),
+        ),
+      )
+      this.entities.highlights.append(...items)
+    } catch (e) {
+      this.utils.notification.show(e.toString(), "error")
+      console.error(e)
+    }
+  }
+
+  resetHighlight = () => !this.entities.panel.hidden && this.highlightByAST()
+
+  _getAST = (input = this.entities.input.value) => {
+    input = input.trim()
+    if (!input) return
+    try {
+      return this.searcher.parse(input)
+    } catch (e) {
+      this.utils.notification.show(e.message || e.toString(), "error", 5000)
+      console.error(e)
+    }
+  }
+
+  _updateExplain = (show = true) => {
+    this.entities.header.classList.toggle("show-bubble", show)
+    if (!show) return
+
+    const el = this.entities.explain
+    const val = this.entities.input.value.trim()
+    if (!val) {
+      el.replaceChildren()
+      el.classList.remove("is-error")
+      return
+    }
+    try {
+      const ast = this.searcher.parse(val)
+      this.explainPresenter.render(el, ast)
+      el.classList.remove("is-error")
+    } catch (e) {
+      this.explainPresenter.renderError(el, e)
+      el.classList.add("is-error")
+      this.entities.header.classList.add("show-bubble")
+    }
+  }
+
+  _createResultAppender = (rootPath) => {
+    const formatBytes = (bytes) => {
+      if (bytes < 1024) return `${bytes} B`
+      return bytes < 1048576 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / 1048576).toFixed(1)} MB`
     }
 
-    hide = () => {
-        this.entities.window.hide()
-        this.utils.hide(this.entities.searching)
-        this.highlighter.clearSearch()
-        this.cancelController?.abort(new DOMException("User Cancellation", "AbortError"))
+    const newItem = (rootPath, fileCtx) => {
+      const { dir, base, name } = this.utils.Package.Path.parse(fileCtx.path)
+      const dirPath = this.config.RELATIVE_PATH ? dir.replace(rootPath, ".") : dir
+      return h("div", { className: "plugin-search-item", "data-path": fileCtx.path },
+        h("div", { className: "plugin-search-item-title" },
+          h("div", { className: "plugin-search-item-name", textContent: this.config.SHOW_EXT ? base : name }),
+          h("div", { className: "plugin-search-item-meta", textContent: formatBytes(fileCtx.stats.size) }),
+        ),
+        h("div", { className: "plugin-search-item-path", textContent: dirPath + this.utils.separator }),
+      )
     }
 
-    show = () => {
-        this.entities.window.show()
-        requestAnimationFrame(() => this.entities.input.select())
+    let count = 0
+    const rafManager = this.utils.getRafManager()
+    const fragment = document.createDocumentFragment()
+    return (fileCtx, signal) => {
+      count++
+      fragment.appendChild(newItem(rootPath, fileCtx))
+      rafManager.schedule(() => {
+        if (signal?.aborted) return
+        this.entities.files.appendChild(fragment)
+        this.entities.counter.textContent = String(count)
+      })
     }
+  }
 
-    call = () => {
-        if (this.entities.window.hidden) {
-            this.show()
-        } else {
-            this.hide()
-        }
+  hide = () => {
+    this.entities.panel.hide()
+    this.highlighter.clearSearch()
+    this.executor.abort()
+    this.fsm.cancel()
+  }
+
+  show = () => {
+    this.entities.panel.show()
+    requestAnimationFrame(() => this.entities.input.select())
+  }
+
+  call = () => {
+    if (this.entities.panel.hidden) {
+      this.show()
+    } else {
+      this.hide()
     }
+  }
 }
 
 module.exports = {
-    plugin: SearchMultiPlugin,
+  plugin: SearchMultiPlugin,
 }

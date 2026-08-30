@@ -10,7 +10,6 @@
 	<link rel="stylesheet" href="typora://app/typemark/lib.asar/bootstrape/css/bootstrap.css" crossorigin="anonymous">
 	<link rel="stylesheet" css-include href="typora://app/typemark/lib.asar/diagram/css/mermaid.css"
 		crossorigin="anonymous">
-	<!-- <link rel="stylesheet" href="./style/font-awesome-4.1.0/css/font-awesome.min.css" crossorigin="anonymous"> -->
 	<link rel="stylesheet" href="./style/font-awesome-4.7.0/css/font-awesome.min.css" crossorigin="anonymous" />
 	<link rel="stylesheet" href="./style/ionicons-2.0.1/css/ionicons.min.css" crossorigin="anonymous">
 	<link rel="stylesheet" href="./style/typora-icon/style.css" crossorigin="anonymous">
@@ -114,8 +113,8 @@
 					data-after-content="Outline is Empty."></div>
 				<div id="file-library" class="sidebar-content-content">
 					<div id="file-library-tree" class="no-selection" data-state="rendering"
-						data-after-content="No Folder is Opened."></div>
-					<div id="file-library-list" class="no-selection" data-state="">
+						data-after-content="No Folder is Opened." tabindex="0"></div>
+					<div id="file-library-list" class="no-selection" data-state="" tabindex="0">
 						<div id="sidebar-loading-template" class="file-list-item">
 							<div class="sidebar-loading">
 								<div class="typora-quick-open-info"><span data-localize="Loading"
@@ -523,6 +522,109 @@
 						['$$', '$$']
 					],
 					processEscapes: true,
+					// iTeX/HTML-style aliases and integrals (omit names already defined by MathJax 4 base: AA, Bbb, oiint, oiiint)
+					macros: {
+						alef: '\\aleph',
+						alefsym: '\\aleph',
+						Alpha: '\\mathrm{A}',
+						and: '\\land',
+						ang: '\\angle',
+						Beta: '\\mathrm{B}',
+						bold: '\\mathbf',
+						bull: '\\bullet',
+						C: '\\mathbb{C}',
+						Chi: '\\mathrm{X}',
+						clubs: '\\clubsuit',
+						cnums: '\\mathbb{C}',
+						Complex: '\\mathbb{C}',
+						coppa: '\u03D9',
+						Coppa: '\u03D8',
+						Dagger: '\\ddagger',
+						Digamma: '\u03DC',
+						darr: '\\downarrow',
+						dArr: '\\Downarrow',
+						Darr: '\\Downarrow',
+						diamonds: '\\diamondsuit',
+						empty: '\\emptyset',
+						Epsilon: '\\mathrm{E}',
+						Eta: '\\mathrm{H}',
+						euro: '\u20AC',
+						exist: '\\exists',
+						geneuro: '\u20AC',
+						geneuronarrow: '\u20AC',
+						geneurowide: '\u20AC',
+						H: '\\mathbb{H}',
+						hAar: '\\Leftrightarrow',
+						harr: '\\leftrightarrow',
+						Harr: '\\Leftrightarrow',
+						hearts: '\\heartsuit',
+						image: '\\Im',
+						infin: '\\infty',
+						Iota: '\\mathrm{I}',
+						isin: '\\in',
+						Kappa: '\\mathrm{K}',
+						koppa: '\u03DF',
+						Koppa: '\u03DE',
+						lang: '\\langle',
+						larr: '\\leftarrow',
+						Larr: '\\Leftarrow',
+						lArr: '\\Leftarrow',
+						lrarr: '\\leftrightarrow',
+						Lrarr: '\\Leftrightarrow',
+						lrArr: '\\Leftrightarrow',
+						Mu: '\\mathrm{M}',
+						N: '\\mathbb{N}',
+						natnums: '\\mathbb{N}',
+						Nu: '\\mathrm{N}',
+						O: '\\emptyset',
+						officialeuro: '\u20AC',
+						Omicron: '\\mathrm{O}',
+						or: '\\lor',
+						P: '\u00B6',
+						pagecolor: ['', 1],
+						part: '\\partial',
+						plusmn: '\\pm',
+						Q: '\\mathbb{Q}',
+						R: '\\mathbb{R}',
+						rang: '\\rangle',
+						rarr: '\\rightarrow',
+						Rarr: '\\Rightarrow',
+						rArr: '\\Rightarrow',
+						real: '\\Re',
+						reals: '\\mathbb{R}',
+						Reals: '\\mathbb{R}',
+						Rho: '\\mathrm{P}',
+						sdot: '\\cdot',
+						sampi: '\u03E1',
+						Sampi: '\u03E0',
+						sect: '\\S',
+						spades: '\\spadesuit',
+						stigma: '\u03DB',
+						Stigma: '\u03DA',
+						sub: '\\subset',
+						sube: '\\subseteq',
+						supe: '\\supseteq',
+						Tau: '\\mathrm{T}',
+						textvisiblespace: '\u2423',
+						thetasym: '\\vartheta',
+						uarr: '\\uparrow',
+						uArr: '\\Uparrow',
+						Uarr: '\\Uparrow',
+						varcoppa: '\u03D9',
+						varstigma: '\u03DB',
+						vline: '\\smash{\\large\\lvert}',
+						weierp: '\\wp',
+						Z: '\\mathbb{Z}',
+						Zeta: '\\mathrm{Z}',
+						dashint: '\\unicodeInt{x2A0D}',
+						ddashint: '\\unicodeInt{x2A0E}',
+						ointctrclockwise: '\\unicodeInt{x2233}',
+						unicodeInt: [
+							'\\mathop{\\vcenter{\\mathchoice{\\huge\\unicode{#1}\\,}{\\unicode{#1}}{\\unicode{#1}}{\\unicode{#1}}}\\,}\\nolimits',
+							1
+						],
+						varointclockwise: '\\unicodeInt{x2232}',
+					},
 					// Base packages - physics and tags configured dynamically in MathBlock.js
 					packages: {
 						'[+]': mathPackages
@@ -1569,7 +1671,7 @@
 	<script src="./plugin/index.js" defer="defer"></script>
 	<script>
 		var mode = "release";
-		window._releaseNo = "ccbaa448";
+		window._releaseNo = "be82b3a0";
 		window.debugMode = (mode != "release");
 
 		window.isOnWindowHtml = true;
